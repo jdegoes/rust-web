@@ -246,13 +246,13 @@ async fn path_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users/jdoe", get(path_handler));
+    let app = Router::<()>::new().route("/users/:name/:age", get(path_handler));
 
     let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/users/jdoe")
+                .uri("/users/jdoe/45")
                 .body(Body::from(""))
                 .unwrap(),
         )
@@ -263,10 +263,13 @@ async fn path_handler_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, "jdoe");
+    assert_eq!(body_as_string, "jdoe45");
 }
-async fn path_handler(axum::extract::Path(_name): axum::extract::Path<String>) -> String {
-    todo!("Return the name of the person")
+
+async fn path_handler(
+    axum::extract::Path((name, age)): axum::extract::Path<(String, u8)>,
+) -> String {
+    name + &age.to_string()
 }
 
 ///
@@ -308,13 +311,11 @@ async fn path2_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:1");
 }
+
 async fn path2_handler(
-    axum::extract::Path(mut name): axum::extract::Path<String>,
-    axum::extract::Path(post_id): axum::extract::Path<u32>,
+    axum::extract::Path((name, post_id)): axum::extract::Path<(String, u32)>,
 ) -> String {
-    name.push_str(":");
-    name.push_str(&post_id.to_string());
-    name
+    format!("{}:{}", name, post_id)
 }
 
 ///
