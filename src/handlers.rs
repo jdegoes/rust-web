@@ -19,6 +19,7 @@
 //! and interact with paths in a route definition.
 //!
 
+use axum::Json;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
 use hyper::Request;
@@ -63,8 +64,17 @@ async fn basic_request_handler_test() {
 
     assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
-async fn basic_request_handler(_request: Request<Body>) -> String {
-    todo!("Return the body, as a string")
+
+async fn basic_request_handler(request: Request<Body>) -> String {
+    use http_body_util::BodyExt;
+    let body = request
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    String::from_utf8(body).unwrap()
 }
 
 ///
@@ -96,12 +106,44 @@ async fn string_handler_test() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let _body_as_string = String::from_utf8(body.to_vec()).unwrap();
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    todo!("assert_eq");
+    assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
+
 async fn string_handler(string: String) -> String {
     string
+}
+
+#[tokio::test]
+async fn string_query_param_handler_test() {
+    // for Body::collect
+    use http_body_util::BodyExt;
+    /// for ServiceExt::oneshot
+    use tower::util::ServiceExt;
+
+    let app = Router::<()>::new().route("/users", get(request_to_string_handler));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/users?test=abc")
+                .body(Body::from("<h1>Hello!</h1>"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
+
+    assert_eq!(body_as_string, "abc");
+}
+
+async fn request_to_string_handler(_request: Request<Body>) -> String {
+    todo!("Return the query parameter `test` as a string")
 }
 
 ///
@@ -131,10 +173,11 @@ async fn bytes_handler_test() {
         .await
         .unwrap();
 
-    let _body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    todo!("assert_eq");
+    assert_eq!(body, "<h1>Hello!</h1>".as_bytes());
 }
+
 async fn bytes_handler(bytes: hyper::body::Bytes) -> hyper::body::Bytes {
     bytes
 }
@@ -174,8 +217,14 @@ async fn json_handler_test() {
 
     assert_eq!(body_as_string, "John Doe");
 }
-async fn json_handler() -> String {
-    todo!("Return the name of the person")
+
+async fn json_handler(Json(Person { name }): Json<Person>) -> String {
+    name
+}
+
+#[derive(serde::Deserialize)]
+struct Person {
+    name: String,
 }
 
 ///
