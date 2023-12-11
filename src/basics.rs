@@ -57,7 +57,7 @@ pub async fn hello_world() {
 /// and that it properly serves the static HTML.
 ///
 async fn handler() -> Html<&'static str> {
-    todo!()
+    Html("<h1>Hello, World!</h1>")
 }
 
 ///
@@ -72,7 +72,14 @@ async fn handler() -> Html<&'static str> {
 /// DELETE /users/:id
 ///
 fn build_router<S: Clone + Send + Sync + 'static>(_router: Router<S>) -> Router<S> {
-    todo!()
+    let app = _router
+        .route("/users/", get(dummy_handler))
+        .route("/users/:id", get(dummy_handler))
+        .route("/users/", post(dummy_handler))
+        .route("/users/:id", put(dummy_handler))
+        .route("/users/:id", delete(dummy_handler));
+
+    app
 }
 
 async fn dummy_handler() -> Html<&'static str> {
@@ -87,9 +94,7 @@ async fn dummy_handler() -> Html<&'static str> {
 /// What are the semantics of the resulting router?
 ///
 fn merge_routers<S: Clone + Send + Sync + 'static>(left: Router<S>, right: Router<S>) -> Router<S> {
-    let (_, _) = (left, right);
-
-    todo!()
+    left.merge(right)
 }
 
 ///
@@ -111,7 +116,7 @@ fn nest_router<S: Clone + Send + Sync + 'static>(_router: Router<S>) -> Router<S
         .route("/:id", put(handler))
         .route("/:id", delete(handler));
 
-    todo!()
+    _router.nest("/users", _user_routes)
 }
 
 ///
