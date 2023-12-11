@@ -20,7 +20,7 @@
 //!
 
 #[allow(unused_imports)]
-use axum::{body::Body, routing::*};
+use axum::{body::Body, http::Method, routing::*};
 use hyper::Request;
 
 ///
@@ -39,8 +39,6 @@ use hyper::Request;
 ///
 #[tokio::test]
 async fn basic_request_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -78,8 +76,6 @@ async fn basic_request_handler(_request: Request<Body>) -> String {
 ///
 #[tokio::test]
 async fn string_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -117,8 +113,6 @@ async fn string_handler(string: String) -> String {
 ///
 #[tokio::test]
 async fn bytes_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -155,8 +149,6 @@ async fn bytes_handler(bytes: hyper::body::Bytes) -> hyper::body::Bytes {
 ///
 #[tokio::test]
 async fn json_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -200,8 +192,6 @@ async fn json_handler() -> String {
 ///
 #[tokio::test]
 async fn path_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -245,8 +235,6 @@ async fn path_handler(axum::extract::Path(_name): axum::extract::Path<String>) -
 ///
 #[tokio::test]
 async fn path2_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -295,8 +283,6 @@ async fn path2_handler(
 ///
 #[tokio::test]
 async fn query_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -335,8 +321,6 @@ async fn query_handler() -> String {
 ///
 #[tokio::test]
 async fn header_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -377,8 +361,6 @@ async fn header_handler(_headers: axum::http::HeaderMap) -> String {
 ///
 #[tokio::test]
 async fn multiple_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -424,8 +406,6 @@ async fn multiple_handler() -> String {
 ///
 #[tokio::test]
 async fn response_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     /// for StatusCode
     use axum::http::StatusCode;
     /// for ServiceExt::oneshot
@@ -468,8 +448,6 @@ async fn response_handler() -> hyper::Response<Body> {
 ///
 #[tokio::test]
 async fn body_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     /// for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -510,8 +488,6 @@ async fn body_handler() -> Body {
 ///
 #[tokio::test]
 async fn json_response_handler_test() {
-    /// for Method::GET
-    use axum::http::Method;
     /// for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
@@ -560,8 +536,6 @@ async fn json_response_handler() -> axum::Json<()> {
 ///
 #[tokio::test]
 async fn handler_trait_test() {
-    /// for Method::GET
-    use axum::http::Method;
     /// for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot

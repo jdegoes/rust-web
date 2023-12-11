@@ -6,8 +6,7 @@ mod welcome;
 
 #[tokio::main]
 async fn main() {
-    playground::example_postgres().await.unwrap();
-
+    // playground::example_postgres().await.unwrap();
     // basics::hello_world().await;
 
     println!("Hello, world!");

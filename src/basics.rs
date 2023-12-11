@@ -14,7 +14,14 @@
 //! other web frameworks as well.
 //!  
 
-use axum::{body::Body, http::Request, response::Html, routing::*, Json, Router};
+#[allow(unused_imports)]
+use axum::{
+    body::Body,
+    http::{Method, Request},
+    response::Html,
+    routing::*,
+    Json, Router,
+};
 
 ///
 /// In this "hello world" example, you can see the core elements of an Axum
@@ -23,7 +30,7 @@ use axum::{body::Body, http::Request, response::Html, routing::*, Json, Router};
 /// 1. A router, which is used for specifying routes.
 /// 2. A single route, defined with a path and a handler.
 /// 3. A handler, which is an asynchronous function that returns a response.
-/// 4. A listner, which is used to listen for incoming connections.
+/// 4. A listener, which is used to listen for incoming connections.
 /// 5. A call to `axum::serve`, which starts the server.
 ///
 pub async fn hello_world() {
@@ -114,27 +121,22 @@ fn nest_router<S: Clone + Send + Sync + 'static>(_router: Router<S>) -> Router<S
 /// performance and determinism. Fortunately, Axum is built on Tower, which provides a
 /// convenient way to test your routes (`oneshot`).
 ///
+/// Use `Request::builder` to construct a `Request` that makes the following unit test
+/// pass. Try to pay attention to how to use `oneshot` and which imports are needed and
+/// for what reasons.
+///
 #[tokio::test]
 async fn test_routes() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::new().route("/users", get(identity_handler));
+    let _app = Router::new().route("/users", get(identity_handler));
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(Method::GET)
-                .uri("/users")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    let _req: Request<Body> = todo!("Use Request::builder");
+
+    let response = _app.oneshot(_req).await.unwrap();
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
@@ -155,8 +157,6 @@ async fn test_routes() {
 ///
 #[tokio::test]
 async fn test_basic_json() {
-    /// for Method::GET
-    use axum::http::Method;
     // for Body::collect
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
