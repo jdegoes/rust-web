@@ -19,8 +19,9 @@
 //! and interact with paths in a route definition.
 //!
 
+use axum::Json;
 #[allow(unused_imports)]
-use axum::{body::Body, http::Method, routing::*};
+use axum::{extract::Path, body::Body, http::Method, routing::*};
 use hyper::Request;
 
 ///
@@ -37,6 +38,7 @@ use hyper::Request;
 /// Although we will cover this in more depth soon, for now, just note that the
 /// return value of the handler is being used as the body of the response.
 ///
+///
 #[tokio::test]
 async fn basic_request_handler_test() {
     // for Body::collect
@@ -51,7 +53,7 @@ async fn basic_request_handler_test() {
             Request::builder()
                 .method(Method::GET)
                 .uri("/users")
-                .body(Body::from("<h1>Hello!</h1>"))
+                .body(Body::from("<h1>Hello 2!</h1>"))
                 .unwrap(),
         )
         .await
@@ -61,10 +63,14 @@ async fn basic_request_handler_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, "<h1>Hello!</h1>");
+    assert_eq!(body_as_string, "<h1>Hello 2!</h1>");
 }
-async fn basic_request_handler(_request: Request<Body>) -> String {
-    todo!("Return the body, as a string")
+async fn basic_request_handler(request: Request<Body>) -> String {
+    // for Body::collect
+    use http_body_util::BodyExt;
+    let body = request.into_body().collect().await.unwrap().to_bytes();
+
+    String::from_utf8(body.to_vec()).unwrap()
 }
 
 ///
@@ -96,9 +102,9 @@ async fn string_handler_test() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let _body_as_string = String::from_utf8(body.to_vec()).unwrap();
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    todo!("assert_eq");
+    assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
 async fn string_handler(string: String) -> String {
     string
@@ -131,9 +137,12 @@ async fn bytes_handler_test() {
         .await
         .unwrap();
 
-    let _body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    todo!("assert_eq");
+    let expected = 
+        hyper::body::Bytes::from("<h1>Hello!</h1>");
+
+    assert_eq!(expected, body);
 }
 async fn bytes_handler(bytes: hyper::body::Bytes) -> hyper::body::Bytes {
     bytes
@@ -174,8 +183,12 @@ async fn json_handler_test() {
 
     assert_eq!(body_as_string, "John Doe");
 }
-async fn json_handler() -> String {
-    todo!("Return the name of the person")
+async fn json_handler(Json(person): Json<Person>) -> String {
+    person.name
+}
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Person {
+    name: String,
 }
 
 ///
@@ -197,7 +210,8 @@ async fn path_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users/jdoe", get(path_handler));
+    let app = 
+        Router::<()>::new().route("/users/:name", get(path_handler));
 
     let response = app
         .oneshot(
@@ -216,8 +230,8 @@ async fn path_handler_test() {
 
     assert_eq!(body_as_string, "jdoe");
 }
-async fn path_handler(axum::extract::Path(_name): axum::extract::Path<String>) -> String {
-    todo!("Return the name of the person")
+async fn path_handler(Path(name): Path<String>) -> String {
+    name
 }
 
 ///
@@ -260,12 +274,9 @@ async fn path2_handler_test() {
     assert_eq!(body_as_string, "jdoe:1");
 }
 async fn path2_handler(
-    axum::extract::Path(mut name): axum::extract::Path<String>,
-    axum::extract::Path(post_id): axum::extract::Path<u32>,
+    Path((name, post_id)): Path<(String, u32)>
 ) -> String {
-    name.push_str(":");
-    name.push_str(&post_id.to_string());
-    name
+    format!("{}:{}", name, post_id)
 }
 
 ///
