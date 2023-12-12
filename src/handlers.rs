@@ -23,7 +23,6 @@ use axum::Json;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use axum::{body::Body, extract::Path};
-#[cfg(test)]
 use axum::{http::Method, routing::*};
 use hyper::{Request, StatusCode};
 
@@ -649,5 +648,55 @@ impl IntoResponse for UserDetailsResponse {
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
 async fn run_users_server() {
-    todo!("Implement the users API")
+     // build our application with a route
+     let app = Router::new()
+        .route("/users/", get(list_users))
+        .route("/users/:id", get(get_user_by_id))
+        .route("/users/", post(create_user))
+        .route("/users/:id", put(update_user))
+        .route("/users/:id", delete(delete_user));
+
+     // run it
+     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+         .await
+         .unwrap();
+ 
+     println!("Listening on {}", listener.local_addr().unwrap());
+ 
+     axum::serve(listener, app).await.unwrap();
+}
+async fn list_users() -> Json<Vec<User>> {
+    Json(vec![
+        User { id: 1, name: "John Doe".to_string() },
+        User { id: 2, name: "Jane Doe".to_string() },
+    ])
+}
+async fn get_user_by_id(Path(id): Path<u32>) -> Json<Option<User>> {
+    Json(match id {
+        1 => Some(User { id: 1, name: "John Doe".to_string() }),
+        2 => Some(User { id: 2, name: "Jane Doe".to_string() }),
+        _ => None,
+    })
+}
+async fn create_user(Json(user): Json<User>) -> Json<User> {
+    Json(User { id: 3, name: user.name })
+}
+async fn update_user(Path(id): Path<u32>, Json(user): Json<User>) -> Json<Option<User>> {
+    Json(match id {
+        1 => Some(User { id: 1, name: user.name }),
+        2 => Some(User { id: 2, name: user.name }),
+        _ => None,
+    })
+}
+async fn delete_user(Path(id): Path<u32>) -> Json<Option<User>> {
+    Json(match id {
+        1 => Some(User { id: 1, name: "John Doe".to_string() }),
+        2 => Some(User { id: 2, name: "Jane Doe".to_string() }),
+        _ => None,
+    })
+}
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, PartialEq)]
+struct User {
+    id: u32,
+    name: String,
 }
