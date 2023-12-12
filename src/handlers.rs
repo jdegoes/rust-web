@@ -565,6 +565,46 @@ async fn handler_trait_handler() -> () {
 }
 
 ///
+/// EXERCISE 13
+///
+/// Your handlers may return a Result<T, E>, where T is any type that implements
+/// `IntoResponse`, and E is any type that implements `IntoResponse`. This allows
+/// you to return an error response if something goes wrong.
+///
+/// Note that the `IntoResponse` for `E` must take care to return a response with
+/// an appropriate (failing) status code.
+///
+/// In this exercise, change the handler to return a `Result<String, ()>`.
+/// Ensure the handler fails and inspect the response. Then, change the handler
+/// to return a `Result<String, StatusCode>` and note the differences.
+///
+#[tokio::test]
+async fn result_handler_test() {
+    /// for StatusCode
+    use axum::http::StatusCode;
+    /// for ServiceExt::oneshot
+    use tower::util::ServiceExt;
+
+    let app = Router::<()>::new().route("/", get(result_handler));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/")
+                .body(Body::from(""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+async fn result_handler() -> () {
+    todo!("Return a Result<String, ()> to start")
+}
+
+///
 /// GRADUATION PROJECT
 ///
 /// Provide a complete implementation of the following API, which uses dummy data.
