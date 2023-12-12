@@ -22,6 +22,8 @@ use axum::{
     routing::*,
     Json, Router,
 };
+use axum::http::StatusCode;
+
 
 ///
 /// In this "hello world" example, you can see the core elements of an Axum
@@ -57,7 +59,7 @@ pub async fn hello_world() {
 /// and that it properly serves the static HTML.
 ///
 async fn handler() -> Html<&'static str> {
-    todo!()
+    Html("<h1>Hello, World!</h1>")
 }
 
 ///
@@ -72,7 +74,12 @@ async fn handler() -> Html<&'static str> {
 /// DELETE /users/:id
 ///
 fn build_router<S: Clone + Send + Sync + 'static>(_router: Router<S>) -> Router<S> {
-    todo!()
+    _router
+        .route("/users/", get(dummy_handler))
+        .route("/user/:id", get(dummy_handler))
+        .route("/users/", post(dummy_handler))
+        .route("/users/:id", put(dummy_handler))
+        .route("/users/:id", delete(dummy_handler))
 }
 
 async fn dummy_handler() -> Html<&'static str> {
@@ -87,9 +94,7 @@ async fn dummy_handler() -> Html<&'static str> {
 /// What are the semantics of the resulting router?
 ///
 fn merge_routers<S: Clone + Send + Sync + 'static>(left: Router<S>, right: Router<S>) -> Router<S> {
-    let (_, _) = (left, right);
-
-    todo!()
+    left.merge(right)
 }
 
 ///
@@ -111,7 +116,7 @@ fn nest_router<S: Clone + Send + Sync + 'static>(_router: Router<S>) -> Router<S
         .route("/:id", put(handler))
         .route("/:id", delete(handler));
 
-    todo!()
+    _router.nest("/users", _user_routes)
 }
 
 ///
@@ -134,9 +139,11 @@ async fn test_routes() {
 
     let _app = Router::new().route("/users", get(identity_handler));
 
-    let _req: Request<Body> = todo!("Use Request::builder");
+    let _req: Request<Body> = Request::builder().method(Method::GET).uri("/users").body(Body::empty()).unwrap();
 
     let response = _app.oneshot(_req).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
@@ -177,12 +184,18 @@ async fn test_basic_json() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let _body_as_string = String::from_utf8(body.to_vec()).unwrap();
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    todo!("assert_eq");
+    assert_eq!(body_as_string, r#"{"name":"John Doe","age":43}"#)
 }
-async fn return_json_hello_world() -> Json<String> {
-    Json(todo!("Return a JSON response here!"))
+async fn return_json_hello_world() -> Json<Person> {
+    Json(Person{name: "John Doe".to_string(), age: 43})
+}
+
+#[derive(serde::Serialize)]
+struct Person {
+    name: String,
+    age: u8
 }
 
 async fn identity_handler(request: Request<Body>) -> Body {
