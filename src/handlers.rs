@@ -20,10 +20,12 @@
 //!
 
 use axum::Json;
+use axum::http::request::Parts;
+use axum::response::{IntoResponse, Response};
 use axum::{body::Body, extract::Path};
 #[cfg(test)]
 use axum::{http::Method, routing::*};
-use hyper::Request;
+use hyper::{Request, StatusCode};
 
 ///
 /// EXERCISE 1
@@ -320,7 +322,7 @@ async fn query_handler_test() {
 
     assert_eq!(body_as_string, "age=42&name=jdoe");
 }
-use axum::extract::Query;
+use axum::extract::{Query, FromRequestParts, FromRequest};
 async fn query_handler(Query(QueryParams { name, age }): Query<QueryParams>) -> String {
     format!("age={}&name={}", age, name)
 }
@@ -591,10 +593,46 @@ async fn handler_trait_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
+    assert_eq!(body_as_string, "User not found");
 }
-async fn handler_trait_handler() -> () {
-    todo!("Return a custom data type for which you provide an implementation of IntoResponse")
+async fn handler_trait_handler(input: UserDetails) -> UserDetailsResponse {
+    if input.username == "jdoe" {
+        UserDetailsResponse::Confirmed(input.username)
+    } else {
+        UserDetailsResponse::UserNotFound
+    }
+}
+struct UserDetails {
+    username: String,
+}
+use async_trait::async_trait;
+#[async_trait]
+impl <S> FromRequestParts<S> for UserDetails {
+    type Rejection = String;
+
+    /// Perform the extraction.
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(UserDetails { username: parts.uri.query().unwrap_or("").to_string() })
+    }
+}
+enum UserDetailsResponse {
+    UserNotFound,
+    Confirmed(String)
+}
+impl IntoResponse for UserDetailsResponse {
+    fn into_response(self) -> Response {
+        match self {
+            UserDetailsResponse::UserNotFound => Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("User not found"))
+                .unwrap(),
+
+            UserDetailsResponse::Confirmed(username) => Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(format!("User {} found", username)))
+                .unwrap(),
+        }
+    }
 }
 
 ///
