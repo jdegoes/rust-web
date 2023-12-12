@@ -613,3 +613,20 @@ async fn handler_trait_test() {
 async fn handler_trait_handler() -> () {
     todo!("Return a custom data type for which you provide an implementation of IntoResponse")
 }
+
+///
+/// GRADUATION PROJECT
+///
+/// Provide a complete implementation of the following API, which uses dummy data.
+///
+/// GET /users
+/// GET /users/:id
+/// POST /users
+/// PUT /users/:id
+/// DELETE /users/:id
+///
+/// Place it into a web server and test to ensure it meets your requirements.
+///
+async fn run_users_server() {
+    todo!("Implement the users API")
+}
