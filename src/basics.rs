@@ -140,12 +140,11 @@ async fn test_routes() {
 
     let _app = Router::new().route("/users", get(identity_handler));
 
-    let _req: Request<Body> = 
-        Request::builder()
-            .method(Method::GET)
-            .uri("/users1")
-            .body(Body::empty())
-            .unwrap();
+    let _req: Request<Body> = Request::builder()
+        .method(Method::GET)
+        .uri("/users1")
+        .body(Body::empty())
+        .unwrap();
 
     let response = _app.oneshot(_req).await.unwrap();
 

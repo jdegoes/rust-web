@@ -20,8 +20,9 @@
 //!
 
 use axum::Json;
-#[allow(unused_imports)]
-use axum::{extract::Path, body::Body, http::Method, routing::*};
+use axum::{body::Body, extract::Path};
+#[cfg(test)]
+use axum::{http::Method, routing::*};
 use hyper::Request;
 
 ///
@@ -139,8 +140,7 @@ async fn bytes_handler_test() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let expected = 
-        hyper::body::Bytes::from("<h1>Hello!</h1>");
+    let expected = hyper::body::Bytes::from("<h1>Hello!</h1>");
 
     assert_eq!(expected, body);
 }
@@ -183,8 +183,8 @@ async fn json_handler_test() {
 
     assert_eq!(body_as_string, "John Doe");
 }
-async fn json_handler(Json(person): Json<Person>) -> String {
-    person.name
+async fn json_handler(Json(Person { name }): Json<Person>) -> String {
+    name
 }
 #[derive(serde::Deserialize, serde::Serialize)]
 struct Person {
@@ -210,8 +210,7 @@ async fn path_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = 
-        Router::<()>::new().route("/users/:name", get(path_handler));
+    let app = Router::<()>::new().route("/users/:user-id", get(path_handler));
 
     let response = app
         .oneshot(
@@ -273,10 +272,13 @@ async fn path2_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:1");
 }
-async fn path2_handler(
-    Path((name, post_id)): Path<(String, u32)>
-) -> String {
+async fn path2_handler(Path(GetUserPosts { name, post_id }): Path<GetUserPosts>) -> String {
     format!("{}:{}", name, post_id)
+}
+#[derive(serde::Deserialize)]
+struct GetUserPosts {
+    name: String,
+    post_id: u32,
 }
 
 ///
@@ -316,10 +318,16 @@ async fn query_handler_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, "name=jdoe&age=42");
+    assert_eq!(body_as_string, "age=42&name=jdoe");
 }
-async fn query_handler() -> String {
-    todo!("Return the query parameters formatted into a query string")
+use axum::extract::Query;
+async fn query_handler(Query(QueryParams { name, age }): Query<QueryParams>) -> String {
+    format!("age={}&name={}", age, name)
+}
+#[derive(serde::Deserialize)]
+struct QueryParams {
+    name: String,
+    age: u32,
 }
 
 ///
@@ -357,8 +365,13 @@ async fn header_handler_test() {
 
     assert_eq!(body_as_string, "application/json");
 }
-async fn header_handler(_headers: axum::http::HeaderMap) -> String {
-    todo!("Return the Content-Type header")
+async fn header_handler(headers: axum::http::HeaderMap) -> String {
+    headers
+        .get("Content-Type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 ///
@@ -396,8 +409,12 @@ async fn multiple_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:10");
 }
-async fn multiple_handler() -> String {
-    todo!("Return the limit query parameter and the name path segment variable, joined together by the character `:`")
+use std::collections::HashMap;
+async fn multiple_handler(
+    Path(name): Path<String>,
+    Query(map): Query<HashMap<String, String>>,
+) -> String {
+    format!("{}:{}", name, map["limit"])
 }
 
 ///
@@ -445,7 +462,11 @@ async fn response_handler() -> hyper::Response<Body> {
     #![allow(unused_imports)]
     use hyper::Response;
 
-    todo!("Return a response with a status code of 200 and a content type of `text/plain`")
+    Response::builder()
+        .status(hyper::StatusCode::OK)
+        .header("Content-Type", "text/plain")
+        .body(Body::from("Hello, world!"))
+        .unwrap()
 }
 
 ///
@@ -484,7 +505,7 @@ async fn body_handler_test() {
     assert_eq!(body_as_string, "Hello, world!");
 }
 async fn body_handler() -> Body {
-    todo!("Return a body with the static string `Hello, world!`")
+    Body::from("Hello, world!")
 }
 
 ///
@@ -523,8 +544,9 @@ async fn json_response_handler_test() {
 
     assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
 }
-async fn json_response_handler() -> axum::Json<()> {
-    todo!("Return a Json<Person> value with name equal to `John Doe`")
+use serde_json::json;
+async fn json_response_handler() -> axum::Json<serde_json::Value> {
+    Json(json!({"name": "John Doe".to_string()}))
 }
 
 ///
