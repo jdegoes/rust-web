@@ -19,6 +19,8 @@
 //! and interact with paths in a route definition.
 //!
 
+use axum::response::IntoResponse;
+use axum::response::Response;
 #[allow(unused_imports)]
 use axum::{body::Body, extract::*, http::Method, routing::*, Json};
 use hyper::{Request, StatusCode};
@@ -640,7 +642,7 @@ async fn handler_trait_test() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/")
+                .uri("/?username=bob")
                 .body(Body::from(""))
                 .unwrap(),
         )
@@ -651,10 +653,61 @@ async fn handler_trait_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
+    assert_eq!(body_as_string, r#"User bob found"#);
 }
-async fn handler_trait_handler() -> () {
-    todo!("Return a custom data type for which you provide an implementation of IntoResponse")
+
+async fn handler_trait_handler(user_details: UserDetails) -> UserDetailsResponse {
+    if user_details.username == "bob" {
+        UserDetailsResponse::Confirmed(user_details.username)
+    } else {
+        UserDetailsResponse::UserNotFound
+    }
+}
+
+struct UserDetails {
+    username: String,
+}
+
+use async_trait::async_trait;
+#[async_trait]
+impl<S> FromRequest<S> for UserDetails {
+    type Rejection = String;
+
+    /// Perform the extraction.
+    async fn from_request(request: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(UserDetails {
+            username: request
+                .into_parts()
+                .0
+                .uri
+                .query()
+                .unwrap()
+                .split('=')
+                .last()
+                .unwrap()
+                .to_string(),
+        })
+    }
+}
+
+enum UserDetailsResponse {
+    UserNotFound,
+    Confirmed(String),
+}
+
+impl IntoResponse for UserDetailsResponse {
+    fn into_response(self) -> Response {
+        match self {
+            UserDetailsResponse::UserNotFound => Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("User not found"))
+                .unwrap(),
+            UserDetailsResponse::Confirmed(username) => Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(format!("User {} found", username)))
+                .unwrap(),
+        }
+    }
 }
 
 ///
@@ -670,6 +723,74 @@ async fn handler_trait_handler() -> () {
 ///
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
-async fn run_users_server() {
-    todo!("Implement the users API")
+/* BROKEN
+pub async fn run_users_server() {
+    let handlers = Handlers{
+        in_memory_data: HashMap::new(),
+    }
+    let user_routes: Router = Router::new()
+        .route("/", get(handlers.get_users()))
+        .route("/:id", get(handlers.get_user()))
+        .route("/", post(handlers.create_user()))
+        .route("/:id", put(handlers.update_user()))
+        .route("/:id", delete(handlers.delete_user()));
+
+    let app = Router::new().nest("/users", user_routes);
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
 }
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct User {
+    id: u8,
+    name: String,
+    age: u8,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+enum UserResponses {
+    UserNotFound,
+    UserCreated(User),
+    UserFound(User),
+}
+
+struct Handlers {
+    in_memory_data: HashMap<u8, User>,
+}
+
+impl Handlers {
+    pub async fn get_users() -> Json<Vec<User>> {
+        in_memory_data
+    }
+
+    pub async fn get_user(self) -> dyn Fn( Path<u8>) -> Json<UserResponses> { | Path(id)|
+        match self.in_memory_data.get(id) {
+            Some(user) => Json(UserResponses::UserFound(user)),
+            None => Json(UserResponses::UserNotFound),
+        }
+    }
+
+    pub async fn create_user(self) -> dyn Fn(Json<User>) -> Json<UserResponses> { |Json(user)|
+        self.in_memory_data.insert(user.id, user);
+        Json(UserResponses::UserCreated(user))
+    }
+
+    pub async fn update_user(self) -> dyn Fn(Path<u8>, Json<User>) -> Json<UserResponses> { |Path(id), Json(user)|
+        self. in_memory_data.insert(id, user);
+        Json(UserResponses::UserCreated(user))
+    }
+
+    pub async fn delete_user(self) -> dyn Fn( Path<u8>) -> Json<UserResponses> { |Path(id)|
+        self. in_memory_data.remove(id);
+        Json(UserResponses::UserNotFound)
+    }
+}
+
+ */
