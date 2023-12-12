@@ -19,10 +19,10 @@
 //! and interact with paths in a route definition.
 //!
 
-use axum::Json;
 #[allow(unused_imports)]
-use axum::{body::Body, http::Method, routing::*};
-use hyper::Request;
+use axum::{body::Body, extract::*, http::Method, routing::*, Json};
+use hyper::{Request, StatusCode};
+use std::collections::HashMap;
 
 ///
 /// EXERCISE 1
@@ -222,7 +222,7 @@ async fn json_handler(Json(Person { name }): Json<Person>) -> String {
     name
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct Person {
     name: String,
 }
@@ -338,7 +338,7 @@ async fn query_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users", get(query_handler));
+    let app = Router::<()>::new().route("/users", get(query_handler2));
 
     let response = app
         .oneshot(
@@ -357,8 +357,27 @@ async fn query_handler_test() {
 
     assert_eq!(body_as_string, "name=jdoe&age=42");
 }
-async fn query_handler() -> String {
-    todo!("Return the query parameters formatted into a query string")
+
+async fn query_handler(
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> String {
+    format!("name={}&age={}", query["name"], query["age"])
+}
+
+async fn query_handler2(
+    axum::extract::Query(QueryParams {
+        name,
+        age, /* , limit*/
+    }): axum::extract::Query<QueryParams>,
+) -> String {
+    format!("name={}&age={}", name, age.unwrap_or(12))
+}
+
+#[derive(serde::Deserialize)]
+struct QueryParams {
+    name: String,
+    age: Option<u8>,
+    // limit: Option<u8>,
 }
 
 ///
@@ -396,8 +415,13 @@ async fn header_handler_test() {
 
     assert_eq!(body_as_string, "application/json");
 }
-async fn header_handler(_headers: axum::http::HeaderMap) -> String {
-    todo!("Return the Content-Type header")
+async fn header_handler(headers: axum::http::HeaderMap) -> String {
+    headers
+        .get("Content-Type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 ///
@@ -435,8 +459,12 @@ async fn multiple_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:10");
 }
-async fn multiple_handler() -> String {
-    todo!("Return the limit query parameter and the name path segment variable, joined together by the character `:`")
+
+async fn multiple_handler(
+    Query(map): Query<HashMap<String, String>>,
+    Path(name): Path<String>,
+) -> String {
+    format!("{}:{}", name, map["limit"])
 }
 
 ///
@@ -480,11 +508,16 @@ async fn response_handler_test() {
         "text/plain"
     );
 }
+
 async fn response_handler() -> hyper::Response<Body> {
     #![allow(unused_imports)]
     use hyper::Response;
 
-    todo!("Return a response with a status code of 200 and a content type of `text/plain`")
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/plain")
+        .body(Body::from(""))
+        .unwrap()
 }
 
 ///
@@ -522,8 +555,9 @@ async fn body_handler_test() {
 
     assert_eq!(body_as_string, "Hello, world!");
 }
+
 async fn body_handler() -> Body {
-    todo!("Return a body with the static string `Hello, world!`")
+    Body::from("Hello, world!")
 }
 
 ///
@@ -543,7 +577,7 @@ async fn json_response_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/", get(json_response_handler));
+    let app = Router::<()>::new().route("/", get(json_response_handler2));
 
     let response = app
         .oneshot(
@@ -562,8 +596,17 @@ async fn json_response_handler_test() {
 
     assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
 }
-async fn json_response_handler() -> axum::Json<()> {
-    todo!("Return a Json<Person> value with name equal to `John Doe`")
+
+async fn json_response_handler() -> Json<Person> {
+    Json(Person {
+        name: "John Doe".to_string(),
+    })
+}
+
+use serde_json::json;
+use serde_json::Value as JsonValue;
+async fn json_response_handler2() -> Json<JsonValue> {
+    Json(json!({"name": "John Doe" }))
 }
 
 ///
