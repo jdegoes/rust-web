@@ -9,7 +9,9 @@ mod welcome;
 async fn main() {
     // playground::example_postgres().await.unwrap();
 
-    basics::hello_world().await;
+    // basics::hello_world().await;
+
+    handlers::run_users_server().await;
 
     println!("Hello, world!");
 }

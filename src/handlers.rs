@@ -647,7 +647,7 @@ impl IntoResponse for UserDetailsResponse {
 ///
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
-async fn run_users_server() {
+pub async fn run_users_server() {
      // build our application with a route
      let app = Router::new()
         .route("/users/", get(list_users))

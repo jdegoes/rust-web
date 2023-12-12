@@ -58,9 +58,10 @@ async fn tracing_middleware() {
     #![allow(unused_imports)]
     use tower_http::trace::TraceLayer;
 
-    let _app = Router::<()>::new().layer(todo!("Add the TraceLayer middleware here"));
+    let layer = 
+        TraceLayer::new_for_http();
 
-    // ...
+    let _app = Router::<()>::new().layer(layer);
 }
 
 ///
@@ -86,11 +87,16 @@ async fn auth_middleware() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
+    use tower_http::auth::require_authorization::Basic;
+
     #[allow(unused_imports)]
     use tower_http::validate_request::ValidateRequestHeaderLayer;
 
+    let layer: ValidateRequestHeaderLayer<Basic<Body>> = 
+        ValidateRequestHeaderLayer::basic("foo", "bar");
+
     let _app = Router::<()>::new()
-        .layer(todo!("Add the ValidateRequestHeaderLayer middleware here"))
+        .layer(layer)
         .route("/", get(|| async { "Hello, World!" }));
 
     let response = _app
@@ -99,7 +105,7 @@ async fn auth_middleware() {
                 .method(Method::GET)
                 .header(
                     "Authorization",
-                    format!("Basic {}", BASE64.encode("foo:bar")),
+                    format!("Basic {}", BASE64.encode("fo2o:bar")),
                 )
                 .body(Body::empty())
                 .unwrap(),
