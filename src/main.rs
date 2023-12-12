@@ -1,4 +1,5 @@
 mod basics;
+mod client;
 mod context;
 mod handlers;
 mod middleware;
