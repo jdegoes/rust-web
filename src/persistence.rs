@@ -174,6 +174,30 @@ async fn delete_todo() {
 }
 
 ///
+/// EXERCISE 7
+///
+/// You do not have to rely on SQLx generating anonymous structs for you.
+/// With the `sqlx::query_as!` macro, you can specify the type of the row
+/// yourself.
+///
+/// In this exercise, introduce a struct called `Todo` that models the `todos`
+/// table, and use the `sqlx::query_as!` macro to select all columns from the
+/// `todos` table.
+///
+#[tokio::test]
+async fn select_star_as() {
+    let _pool = PgPoolOptions::new()
+        .max_connections(1)
+        .connect(&std::env::var("DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+
+    todo!("Insert query here");
+
+    assert!(true);
+}
+
+///
 /// GRADUATION PROJECT
 ///
 /// In this project, you will build a simple CRUD API for a todo list,
