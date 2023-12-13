@@ -82,6 +82,14 @@ fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
     format!("{}", gbp.parse::<f64>().unwrap() / gbp_to_usd_rate)
 }
 
+fn convert_eur_to_usd(eur: String, eur_to_usd_rate: f64) -> String {
+    format!("{}", eur.parse::<f64>().unwrap() * eur_to_usd_rate)
+}
+
+fn convert_usd_to_eur(usd: String, eur_to_usd_rate: f64) -> String {
+    format!("{}", usd.parse::<f64>().unwrap() / eur_to_usd_rate)
+}
+
 ///
 /// EXERCISE 2
 ///
@@ -338,17 +346,20 @@ async fn generic_state_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _app = Router::new()
+    let config = AllExchangeRates {
+        gbp_to_usd: GBPtoUSD(1.3),
+        eur_to_usd: EURtoUSD(1.2),
+    };
+
+    let app = Router::new()
         .route("/usd_to_gbp", get(generic_usd_to_gbp_handler))
         .route("/gbp_to_usd", get(generic_gbp_to_usd_handler))
+        .with_state(config.gbp_to_usd)
         .route("/eur_to_usd", get(generic_eur_to_usd_handler))
         .route("/usd_to_eur", get(generic_usd_to_eur_handler))
-        .with_state(AllExchangeRates {
-            gbp_to_usd: GBPtoUSD(1.3),
-            eur_to_usd: EURtoUSD(1.2),
-        });
+        .with_state(config.eur_to_usd);
 
-    let response = _app
+    let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
@@ -365,25 +376,43 @@ async fn generic_state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn generic_usd_to_gbp_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn generic_usd_to_gbp_handler(
+    State(GBPtoUSD(rate)): State<GBPtoUSD>,
+    price: String,
+) -> String {
+    convert_usd_to_gbp(price, rate)
 }
-async fn generic_gbp_to_usd_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn generic_gbp_to_usd_handler(
+    State(GBPtoUSD(rate)): State<GBPtoUSD>,
+    price: String,
+) -> String {
+    convert_gbp_to_usd(price, rate)
 }
-async fn generic_eur_to_usd_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn generic_eur_to_usd_handler(
+    State(EURtoUSD(rate)): State<EURtoUSD>,
+    price: String,
+) -> String {
+    convert_eur_to_usd(price, rate)
 }
-async fn generic_usd_to_eur_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn generic_usd_to_eur_handler(
+    State(EURtoUSD(rate)): State<EURtoUSD>,
+    price: String,
+) -> String {
+    convert_usd_to_eur(price, rate)
 }
-#[derive(Clone, Copy, Debug, PartialEq)]
+
 struct AllExchangeRates {
     gbp_to_usd: GBPtoUSD,
     eur_to_usd: EURtoUSD,
 }
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct GBPtoUSD(f64);
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct EURtoUSD(f64);
 
