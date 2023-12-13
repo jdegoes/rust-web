@@ -318,16 +318,39 @@ pub async fn prometheus_metrics_middleware() {
 /// In this exercise, you will use the `axum::middleware::from_fn` to create an
 /// "identity" middleware that does nothing.
 ///
+#[tokio::test]
 async fn custom_middleware() {
     use axum::middleware::from_fn;
 
-    let _app = Router::<()>::new().layer(todo!("Reference your identity middleware here"));
+    let layer = from_fn(my_identity_middleware);
 
-    // ...
+    let app = Router::<()>::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .header("Origin", "https://example.com")
+                .method(Method::GET)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
+
+    assert_eq!(body_as_string, "Hello, World!");
 }
+
 async fn my_identity_middleware(
-    _request: axum::extract::Request,
-    _next: axum::middleware::Next,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
 ) -> axum::response::Response {
-    todo!("Implement your identity middleware here")
+    next.run(request).await
 }
