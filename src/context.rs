@@ -217,12 +217,12 @@ async fn state_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
     let _app = Router::new()
         .route("/usd_to_gbp", get(usd_to_gbp_handler))
         .route("/gbp_to_usd", get(gbp_to_usd_handler))
-        .with_state(());
+        .with_state(gbp_to_usd_rate);
 
     let response = _app
         .oneshot(
@@ -241,11 +241,13 @@ async fn state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn usd_to_gbp_handler(State(rate): State<f64>, usd: String) -> String {
+    convert_usd_to_gbp(usd, rate)
 }
-async fn gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn gbp_to_usd_handler(State(rate): State<f64>, gbp: String) -> String {
+    convert_gbp_to_usd(gbp, rate)
 }
 
 ///
