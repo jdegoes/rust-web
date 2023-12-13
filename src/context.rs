@@ -25,6 +25,8 @@ use axum::extract::State;
 use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 ///
 /// EXERCISE 1
@@ -103,9 +105,6 @@ fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
 ///
 ///
 pub fn shared_mutable_context_routes() -> Router {
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
     let default_gbp_to_usd_rate = 1.3;
     let gbp_to_usd_rate: Arc<Mutex<f64>> = Arc::new(Mutex::new(default_gbp_to_usd_rate));
 
@@ -266,14 +265,14 @@ async fn mutable_state_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
-    let _app = Router::new()
+    let app = Router::new()
         .route("/usd_to_gbp", get(mutable_usd_to_gbp_handler))
         .route("/gbp_to_usd", get(mutable_gbp_to_usd_handler))
-        .with_state(());
+        .with_state(Arc::new(Mutex::new(gbp_to_usd_rate)));
 
-    let response = _app
+    let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
@@ -290,11 +289,13 @@ async fn mutable_state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn mutable_usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn mutable_usd_to_gbp_handler(State(rate): State<Arc<Mutex<f64>>>, usd: String) -> String {
+    convert_usd_to_gbp(usd, *rate.lock().await)
 }
-async fn mutable_gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+
+async fn mutable_gbp_to_usd_handler(State(rate): State<Arc<Mutex<f64>>>, gbp: String) -> String {
+    convert_gbp_to_usd(gbp, *rate.lock().await)
 }
 
 ///
