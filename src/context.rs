@@ -42,11 +42,17 @@ async fn closure_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
     let _app = Router::<()>::new()
-        .route("/usd_to_gbp", get(todo!("Make a closure")))
-        .route("/gbp_to_usd", get(todo!("Make a closure")));
+        .route(
+            "/usd_to_gbp",
+            get(move |usd: String| async move { convert_usd_to_gbp(usd, gbp_to_usd_rate) }),
+        )
+        .route(
+            "/gbp_to_usd",
+            get(move |gbp: String| async move { convert_gbp_to_usd(gbp, gbp_to_usd_rate) }),
+        );
 
     let response = _app
         .oneshot(
@@ -65,9 +71,11 @@ async fn closure_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
+
 fn convert_usd_to_gbp(usd: String, gbp_to_usd_rate: f64) -> String {
     format!("{}", usd.parse::<f64>().unwrap() * gbp_to_usd_rate)
 }
+
 fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
     format!("{}", gbp.parse::<f64>().unwrap() / gbp_to_usd_rate)
 }
@@ -93,26 +101,83 @@ fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
 /// context between handlers. What would you use if the context were
 /// immutable? What would you use if the context were mutable?
 ///
-#[tokio::test]
-async fn shared_mutable_context() {
-    // for Body::collect
-    use http_body_util::BodyExt;
-    /// for ServiceExt::oneshot
-    use tower::util::ServiceExt;
+///
+pub fn shared_mutable_context_routes() -> Router {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
-    let _gbp_to_usd_rate = 1.3;
+    let default_gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate: Arc<Mutex<f64>> = Arc::new(Mutex::new(default_gbp_to_usd_rate));
 
-    let _app = Router::<()>::new()
+    Router::<()>::new()
         .route(
             "/usd_to_gbp",
-            get(move |usd: String| async move { convert_usd_to_gbp(usd, _gbp_to_usd_rate) }),
+            get({
+                let gbp_to_usd_rate = gbp_to_usd_rate.clone();
+                |usd: String| async move { convert_usd_to_gbp(usd, *gbp_to_usd_rate.lock().await) }
+            }),
         )
         .route(
             "/gbp_to_usd",
-            get(move |gbp: String| async move { convert_gbp_to_usd(gbp, _gbp_to_usd_rate) }),
-        );
+            get({
+                let gbp_to_usd_rate = gbp_to_usd_rate.clone();
+                |gbp: String| async move { convert_gbp_to_usd(gbp, *gbp_to_usd_rate.lock().await) }
+            }),
+        )
+        .route(
+            "/exchange_rate",
+            get({
+                let gbp_to_usd_rate = gbp_to_usd_rate.clone();
+                || async move { format!("{}", *gbp_to_usd_rate.lock().await) }
+            }),
+        )
+        .route(
+            "/exchange_rate",
+            put({
+                let gbp_to_usd_rate = gbp_to_usd_rate.clone();
+                |rate: String| async move {
+                    let mut locked = gbp_to_usd_rate.lock().await;
+                    let new_rate = rate.parse::<f64>().unwrap();
+                    *locked = new_rate;
+                    format!("{}", new_rate)
+                }
+            }),
+        )
+        .route(
+            "/exchange_rate",
+            delete({
+                let gbp_to_usd_rate = gbp_to_usd_rate.clone();
+                move || async move {
+                    let mut locked = gbp_to_usd_rate.lock().await;
+                    *locked = default_gbp_to_usd_rate;
+                    format!("{}", default_gbp_to_usd_rate)
+                }
+            }),
+        )
+}
 
-    let response = _app
+pub async fn start_router_mutable_context() {
+    // build our application with a route
+    let app = shared_mutable_context_routes();
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+#[tokio::test]
+async fn shared_mutable_context() {
+    use http_body_util::BodyExt;
+    use tower::util::ServiceExt;
+
+    let app = shared_mutable_context_routes();
+
+    let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
