@@ -21,7 +21,7 @@
 use axum::body::Body;
 use axum::{routing::*, Router};
 use base64::Engine as _;
-use hyper::Request;
+use hyper::{Request, StatusCode};
 use std::time::Duration;
 
 const BASE64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
@@ -95,8 +95,8 @@ async fn auth_middleware() {
         ValidateRequestHeaderLayer::basic("foo", "bar");
 
     let _app = Router::<()>::new()
-        .layer(layer)
-        .route("/", get(|| async { "Hello, World!" }));
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
 
     let response = _app
         .oneshot(
@@ -111,6 +111,8 @@ async fn auth_middleware() {
         )
         .await
         .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
