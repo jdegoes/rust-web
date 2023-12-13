@@ -710,6 +710,7 @@ impl IntoResponse for UserDetailsResponse {
     }
 }
 
+/* BROKEN
 ///
 /// GRADUATION PROJECT
 ///
@@ -723,7 +724,6 @@ impl IntoResponse for UserDetailsResponse {
 ///
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
-/* BROKEN
 pub async fn run_users_server() {
     let handlers = Handlers{
         in_memory_data: HashMap::new(),
