@@ -19,6 +19,9 @@
 //! In this section, you will explore these mechanisms.
 //!
 
+use std::cell::RefCell;
+use std::sync::Arc;
+
 #[allow(unused_imports)]
 use axum::extract::State;
 #[allow(unused_imports)]
@@ -42,11 +45,11 @@ async fn closure_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
     let _app = Router::<()>::new()
-        .route("/usd_to_gbp", get(todo!("Make a closure")))
-        .route("/gbp_to_usd", get(todo!("Make a closure")));
+        .route("/usd_to_gbp", get(move |usd: String| async move { convert_usd_to_gbp(usd, gbp_to_usd_rate)}))
+        .route("/gbp_to_usd", get(move |gbp: String| async move { convert_gbp_to_usd(gbp, gbp_to_usd_rate)}));
 
     let response = _app
         .oneshot(
@@ -100,16 +103,39 @@ async fn shared_mutable_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    // let _gbp_to_usd_rate: Arc<f64> = Arc::new(1.3);
+    use tokio::sync::Mutex;
+
+    let _gbp_to_usd_rate: Arc<Mutex<f64>> = Arc::new(Mutex::new(1.3));
 
     let _app = Router::<()>::new()
         .route(
             "/usd_to_gbp",
-            get(move |usd: String| async move { convert_usd_to_gbp(usd, _gbp_to_usd_rate) }),
+            get(move |usd: String| async move {                 
+                let locked = _gbp_to_usd_rate.lock().await;
+
+                *locked = 1.4;
+
+                convert_usd_to_gbp(usd, *locked)
+            }),
         )
         .route(
             "/gbp_to_usd",
-            get(move |gbp: String| async move { convert_gbp_to_usd(gbp, _gbp_to_usd_rate) }),
+            get(move |gbp: String| async move { 
+                let locked = _gbp_to_usd_rate.lock().await;
+
+                *locked = 1.5;
+
+                convert_gbp_to_usd(gbp, *locked) 
+            }),
+        )
+        .route(
+            "/usd_to_gbp_rate",
+            get(move |_: ()| async move { 
+                let locked = _gbp_to_usd_rate.lock().await;
+
+                format!("{}", *locked)
+            }),
         );
 
     let response = _app

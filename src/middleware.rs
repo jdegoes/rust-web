@@ -96,8 +96,8 @@ async fn auth_middleware() {
         ValidateRequestHeaderLayer::basic("foo", "bar");
 
     let _app = Router::<()>::new()
-        .layer(layer)
-        .route("/", get(|| async { "Hello, World!" }));
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
 
     let response = _app
         .oneshot(
@@ -105,7 +105,7 @@ async fn auth_middleware() {
                 .method(Method::GET)
                 .header(
                     "Authorization",
-                    format!("Basic {}", BASE64.encode("fo2o:bar")),
+                    format!("Basic {}", BASE64.encode("foo:bar")),
                 )
                 .body(Body::empty())
                 .unwrap(),
@@ -136,7 +136,10 @@ async fn timeout_middleware() {
     #![allow(unused_imports)]
     use tower_http::timeout::TimeoutLayer;
 
-    let _app = Router::<()>::new().layer(todo!("Add the TimeoutLayer middleware here"));
+    let layer = 
+        TimeoutLayer::new(Duration::from_secs(5));
+
+    let _app = Router::<()>::new().layer(layer);
 
     // ...
 }
@@ -162,7 +165,11 @@ async fn cors_middleware() {
 
     use tower_http::cors::{Any, CorsLayer};
 
-    let _app = Router::<()>::new().layer(todo!("Add the CorsLayer middleware here"));
+    let layer = CorsLayer::new()
+        .allow_methods(Any)
+        .allow_origin(Any);
+
+    let _app = Router::<()>::new().layer(layer);
 
     // ...
 }
@@ -190,7 +197,10 @@ async fn basic_metrics_middleware() {
     #![allow(unused_imports)]
     use tower_http::metrics::InFlightRequestsLayer;
 
-    let _app = Router::<()>::new().layer(todo!("Add the InFlightRequestsLayer middleware here"));
+    let (layer, _counter) = 
+        InFlightRequestsLayer::pair();
+
+    let _app = Router::<()>::new().layer(layer);
 
     // ...
 }
@@ -212,12 +222,18 @@ async fn basic_metrics_middleware() {
 async fn prometheus_metrics_middleware() {
     use axum_prometheus::PrometheusMetricLayer;
 
-    let _app = Router::<()>::new().route("/fast", get(|| async {})).route(
-        "/slow",
-        get(|| async {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }),
-    );
+    let (layer, handle) = PrometheusMetricLayer::pair();
+
+    let _app = Router::<()>::new()
+        .route("/fast", get(|| async {}))
+        .route(
+            "/slow",
+            get(|| async {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }),
+        )
+        .route("/metrics", get(|| async move { handle.render() }))
+        .layer(layer);
 
     // ...
 }
@@ -234,7 +250,7 @@ async fn prometheus_metrics_middleware() {
 async fn custom_middleware() {
     use axum::middleware::from_fn;
 
-    let _app = Router::<()>::new().layer(todo!("Reference your identity middleware here"));
+    let _app = Router::<()>::new().layer(from_fn(my_identity_middleware));
 
     // ...
 }
@@ -242,5 +258,5 @@ async fn my_identity_middleware(
     _request: axum::extract::Request,
     _next: axum::middleware::Next,
 ) -> axum::response::Response {
-    todo!("Implement your identity middleware here")
+    _next.run(_request).await
 }
