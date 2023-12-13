@@ -19,10 +19,16 @@
 //!
 
 use axum::body::Body;
+/// for Method::GET
+use axum::http::Method;
 use axum::{routing::*, Router};
 use base64::Engine as _;
 use hyper::{Request, StatusCode};
 use std::time::Duration;
+// for Body::collect
+use http_body_util::BodyExt;
+/// for ServiceExt::oneshot
+use tower::util::ServiceExt;
 
 const BASE64: base64::engine::GeneralPurpose = base64::engine::general_purpose::STANDARD;
 
@@ -79,13 +85,6 @@ async fn tracing_middleware() {
 ///
 #[tokio::test]
 async fn auth_middleware() {
-    /// for Method::GET
-    use axum::http::Method;
-    // for Body::collect
-    use http_body_util::BodyExt;
-    /// for ServiceExt::oneshot
-    use tower::util::ServiceExt;
-
     use tower_http::auth::require_authorization::Basic;
 
     #[allow(unused_imports)]
@@ -94,11 +93,11 @@ async fn auth_middleware() {
     let layer: ValidateRequestHeaderLayer<Basic<Body>> =
         ValidateRequestHeaderLayer::basic("foo", "bar");
 
-    let _app = Router::<()>::new()
+    let app = Router::<()>::new()
         .route("/", get(|| async { "Hello, World!" }))
         .layer(layer);
 
-    let response = _app
+    let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
@@ -133,13 +132,34 @@ async fn auth_middleware() {
 /// impose a timeout on requests. The constructor for `TimeoutLayer` takes a
 /// `Duration`.
 ///
+#[tokio::test]
 async fn timeout_middleware() {
     #![allow(unused_imports)]
     use tower_http::timeout::TimeoutLayer;
 
-    let _app = Router::<()>::new().layer(todo!("Add the TimeoutLayer middleware here"));
+    let layer = TimeoutLayer::new(Duration::from_secs(5));
 
-    // ...
+    let app = Router::<()>::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
+
+    assert_eq!(body_as_string, "Hello, World!");
 }
 
 ///
@@ -157,15 +177,44 @@ async fn timeout_middleware() {
 /// application, by starting with `CorsLayer::new()`, and calling methods on the
 /// layer to configure it.
 ///
+#[tokio::test]
 async fn cors_middleware() {
-    /// for Method::GET
-    use axum::http::Method;
-
     use tower_http::cors::{Any, CorsLayer};
 
-    let _app = Router::<()>::new().layer(todo!("Add the CorsLayer middleware here"));
+    let layer = CorsLayer::new()
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::DELETE,
+            Method::PUT,
+            Method::PATCH,
+            Method::OPTIONS,
+            Method::HEAD,
+        ])
+        .allow_origin(Any);
 
-    // ...
+    let app = Router::<()>::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .header("Origin", "https://example.com")
+                .method(Method::GET)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
+
+    assert_eq!(body_as_string, "Hello, World!");
 }
 
 ///
@@ -187,13 +236,37 @@ async fn cors_middleware() {
 /// in the next section how to use `axum_prometheus` to get something more usable
 /// for a production application.
 ///
+#[tokio::test]
 async fn basic_metrics_middleware() {
     #![allow(unused_imports)]
     use tower_http::metrics::InFlightRequestsLayer;
 
-    let _app = Router::<()>::new().layer(todo!("Add the InFlightRequestsLayer middleware here"));
+    let (layer, counter) = InFlightRequestsLayer::pair();
 
-    // ...
+    let app = Router::<()>::new()
+        .route("/", get(|| async { "Hello, World!" }))
+        .layer(layer);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .header("Origin", "https://example.com")
+                .method(Method::GET)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    assert_eq!(counter.get(), 1);
+
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
+
+    assert_eq!(body_as_string, "Hello, World!");
 }
 
 ///
@@ -210,17 +283,30 @@ async fn basic_metrics_middleware() {
 /// `PrometheusMetricLayer::pair` method. The handle exposes a `render` method
 /// that returns a `String` containing the Prometheus metrics.
 ///
-async fn prometheus_metrics_middleware() {
+pub async fn prometheus_metrics_middleware() {
     use axum_prometheus::PrometheusMetricLayer;
 
-    let _app = Router::<()>::new().route("/fast", get(|| async {})).route(
-        "/slow",
-        get(|| async {
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }),
-    );
+    let (layer, handle) = PrometheusMetricLayer::pair();
 
-    // ...
+    let app = Router::<()>::new()
+        .route("/fast", get(|| async {}))
+        .route(
+            "/slow",
+            get(|| async {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }),
+        )
+        .layer(layer)
+        .route("/metrics", get(|| async move { handle.render() }));
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
 }
 
 ///
