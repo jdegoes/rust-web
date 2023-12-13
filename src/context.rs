@@ -20,14 +20,18 @@
 //!
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use axum::extract::Path;
+use axum::{Extension, Json};
 #[allow(unused_imports)]
 use axum::extract::State;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
+use tokio::sync::Mutex;
 
 ///
 /// EXERCISE 1
@@ -103,16 +107,19 @@ async fn shared_mutable_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    // let _gbp_to_usd_rate: Arc<f64> = Arc::new(1.3);
     use tokio::sync::Mutex;
 
     let _gbp_to_usd_rate: Arc<Mutex<f64>> = Arc::new(Mutex::new(1.3));
 
-    let _app = Router::<()>::new()
+    let rate1 = _gbp_to_usd_rate.clone();
+    let rate2 = _gbp_to_usd_rate.clone();
+    let rate3 = _gbp_to_usd_rate.clone();
+
+    let _app = Router::<()>::new()    
         .route(
             "/usd_to_gbp",
-            get(move |usd: String| async move {                 
-                let locked = _gbp_to_usd_rate.lock().await;
+            get(|usd: String| async move {                 
+                let mut locked = rate1.lock().await;
 
                 *locked = 1.4;
 
@@ -121,8 +128,8 @@ async fn shared_mutable_context() {
         )
         .route(
             "/gbp_to_usd",
-            get(move |gbp: String| async move { 
-                let locked = _gbp_to_usd_rate.lock().await;
+            get(|gbp: String| async move { 
+                let mut locked = rate2.lock().await;
 
                 *locked = 1.5;
 
@@ -131,8 +138,8 @@ async fn shared_mutable_context() {
         )
         .route(
             "/usd_to_gbp_rate",
-            get(move |_: ()| async move { 
-                let locked = _gbp_to_usd_rate.lock().await;
+            get(|_: ()| async move { 
+                let locked = rate3.lock().await;
 
                 format!("{}", *locked)
             }),
@@ -178,12 +185,12 @@ async fn state_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
     let _app = Router::new()
         .route("/usd_to_gbp", get(usd_to_gbp_handler))
         .route("/gbp_to_usd", get(gbp_to_usd_handler))
-        .with_state(());
+        .with_state(gbp_to_usd_rate);
 
     let response = _app
         .oneshot(
@@ -202,11 +209,11 @@ async fn state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn usd_to_gbp_handler(State(rate): State<f64>, usd: String) -> String {
+    convert_usd_to_gbp(usd, rate)
 }
-async fn gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn gbp_to_usd_handler(State(rate): State<f64>, gbp: String) -> String {
+    convert_gbp_to_usd(gbp, rate)
 }
 
 ///
@@ -230,7 +237,7 @@ async fn mutable_state_shared_context() {
     let _app = Router::new()
         .route("/usd_to_gbp", get(mutable_usd_to_gbp_handler))
         .route("/gbp_to_usd", get(mutable_gbp_to_usd_handler))
-        .with_state(());
+        .with_state(Arc::new(Mutex::new(_gbp_to_usd_rate)));
 
     let response = _app
         .oneshot(
@@ -249,11 +256,19 @@ async fn mutable_state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn mutable_usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn mutable_usd_to_gbp_handler(State(arc): State<Arc<Mutex<f64>>>, usd: String) -> String {
+    let mut locked = arc.lock().await;
+    
+    *locked = 1.4;
+
+    convert_usd_to_gbp(usd, *locked)
 }
-async fn mutable_gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn mutable_gbp_to_usd_handler(State(arc): State<Arc<Mutex<f64>>>, usd: String) -> String {
+    let mut locked = arc.lock().await;
+    
+    *locked = 1.5;
+
+    convert_gbp_to_usd(usd, *locked)
 }
 
 ///
@@ -297,10 +312,10 @@ async fn generic_state_shared_context() {
     use tower::util::ServiceExt;
 
     let _app = Router::new()
-        .route("/usd_to_gbp", get(generic_usd_to_gbp_handler))
-        .route("/gbp_to_usd", get(generic_gbp_to_usd_handler))
-        .route("/eur_to_usd", get(generic_eur_to_usd_handler))
-        .route("/usd_to_eur", get(generic_usd_to_eur_handler))
+        .route("/usd_to_gbp", get(generic_usd_to_gbp_handler::<AllExchangeRates>))
+        .route("/gbp_to_usd", get(generic_gbp_to_usd_handler::<AllExchangeRates>))
+        .route("/eur_to_usd", get(generic_eur_to_usd_handler::<AllExchangeRates>))
+        .route("/usd_to_eur", get(generic_usd_to_eur_handler::<AllExchangeRates>))
         .with_state(AllExchangeRates {
             gbp_to_usd: GBPtoUSD(1.3),
             eur_to_usd: EURtoUSD(1.2),
@@ -323,27 +338,51 @@ async fn generic_state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn generic_usd_to_gbp_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+async fn generic_usd_to_gbp_handler<S: HasGBPtoUSD>(State(s): State<S>, _price: String) -> String {
+    let gbp_to_usd = s.gbp_to_usd();
+
+    format!("{}", _price.parse::<f64>().unwrap() * gbp_to_usd.0)
 }
-async fn generic_gbp_to_usd_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+async fn generic_gbp_to_usd_handler<S: HasGBPtoUSD>(State(s): State<S>, _price: String) -> String {
+    let gbp_to_usd = s.gbp_to_usd();
+
+    format!("{}", _price.parse::<f64>().unwrap() / gbp_to_usd.0)
 }
-async fn generic_eur_to_usd_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+async fn generic_eur_to_usd_handler<S: HasEURtoUSD>(State(s): State<S>, _price: String) -> String {
+    let eur_to_usd = s.eur_to_usd();
+
+    format!("{}", _price.parse::<f64>().unwrap() * eur_to_usd.0)
 }
-async fn generic_usd_to_eur_handler(_price: String) -> String {
-    todo!("Use State to access the exchange rate")
+async fn generic_usd_to_eur_handler<S: HasEURtoUSD>(State(s): State<S>, _price: String) -> String {
+    let eur_to_usd = s.eur_to_usd();
+
+    format!("{}", _price.parse::<f64>().unwrap() / eur_to_usd.0)
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct AllExchangeRates {
     gbp_to_usd: GBPtoUSD,
     eur_to_usd: EURtoUSD,
 }
+impl HasGBPtoUSD for AllExchangeRates {
+    fn gbp_to_usd(&self) -> GBPtoUSD {
+        self.gbp_to_usd
+    }
+}
+impl HasEURtoUSD for AllExchangeRates {
+    fn eur_to_usd(&self) -> EURtoUSD {
+        self.eur_to_usd
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct GBPtoUSD(f64);
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct EURtoUSD(f64);
+trait HasGBPtoUSD {
+    fn gbp_to_usd(&self) -> GBPtoUSD;
+}
+trait HasEURtoUSD {
+    fn eur_to_usd(&self) -> EURtoUSD;
+}
 
 ///
 /// EXERCISE 6
@@ -380,9 +419,10 @@ async fn extension_shared_context() {
 
     let _gbp_to_usd_rate = 1.3;
 
-    let _app = Router::new()
+    let _app = Router::<()>::new()
         .route("/usd_to_gbp", get(extension_usd_to_gbp_handler))
-        .route("/gbp_to_usd", get(extension_gbp_to_usd_handler));
+        .route("/gbp_to_usd", get(extension_gbp_to_usd_handler))
+        .layer(Extension(_gbp_to_usd_rate));
 
     let response = _app
         .oneshot(
@@ -401,11 +441,11 @@ async fn extension_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn extension_usd_to_gbp_handler() -> String {
-    todo!("Use Extensions to access the exchange rate")
+async fn extension_usd_to_gbp_handler(Extension(rate): Extension<f64>, usd: String) -> String {
+    format!("{}", usd.parse::<f64>().unwrap() * rate)
 }
-async fn extension_gbp_to_usd_handler() -> String {
-    todo!("Use Extensions to access the exchange rate")
+async fn extension_gbp_to_usd_handler(Extension(rate): Extension<f64>, gbp: String) -> String {
+    format!("{}", gbp.parse::<f64>().unwrap() / rate)
 }
 
 ///
@@ -424,5 +464,57 @@ async fn extension_gbp_to_usd_handler() -> String {
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
 async fn run_users_server() {
-    todo!("Implement the users API")
+    let state: Arc<UsersState> = Arc::new(UsersState {
+        map: Mutex::new(HashMap::new()),
+    });
+    
+    let app = Router::new()
+        .route("/users",     get(get_users_handler))
+        .route("/users/:id", get(get_user_by_id))
+        .route("/users",     post(create_user))
+        .route("/users/:id", put(update_user_by_id))
+        .route("/users/:id", delete(delete_user_by_id))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+async fn get_users_handler(State(state): State<Arc<UsersState>>) -> Json<Vec<User>> {
+    let map = state.map.lock().await;
+
+    Json(map.values().map(|x| { x.clone() }).collect())
+}
+async fn get_user_by_id(State(state): State<Arc<UsersState>>, Path(id): Path<String>) -> Json<Option<User>> {
+    let map = state.map.lock().await;
+
+    Json(map.get(&id).map(|x| { x.clone() }))
+}
+async fn create_user(State(state): State<Arc<UsersState>>, Json(user): Json<User>) -> () {
+    let mut map = state.map.lock().await;
+
+    map.insert(user.id.clone(), user.clone());
+}
+async fn update_user_by_id(State(state): State<Arc<UsersState>>, Path(id): Path<String>, Json(user): Json<User>) -> () {
+    let mut map = state.map.lock().await;
+
+    map.insert(id.clone(), user.clone());
+}
+async fn delete_user_by_id(State(state): State<Arc<UsersState>>, Path(id): Path<String>) -> () {
+    let mut map = state.map.lock().await;
+
+    map.remove(&id);
+}
+struct UsersState {
+    map: Mutex<HashMap<String, User>>,
+}
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct User {
+    id: String,
+    name: String,
+    email: String,
 }
