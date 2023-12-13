@@ -41,7 +41,7 @@ const BASE64: base64::engine::GeneralPurpose = base64::engine::general_purpose::
 /// a `Service` and returns a new `Service`.
 ///
 /// Thus, middleware in Axum is essentially a handler transformer:
-/// given the old handler, the mdidleware returns a new handler.
+/// given the old handler, the middleware returns a new handler.
 ///
 /// Axum middleware can thus modify requests and responses of the
 /// handlers they are applied to.
