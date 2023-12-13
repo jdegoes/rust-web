@@ -50,7 +50,7 @@ use sqlx::{postgres::PgPoolOptions, Postgres};
 /// methods.
 ///
 async fn query_playground() {
-    let _ = sqlx::query!("SELECT 1 + 1 AS sum");
+    // let _ = sqlx::query!("SELECT 1 + 1 AS sum");
 
     let _ = sqlx::query::<Postgres>("SELECT 1 + 1 AS sum");
 }
