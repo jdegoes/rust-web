@@ -116,6 +116,94 @@ struct CatFact {
 /// set the body of a request using the `.body` method.`
 ///
 pub async fn posts_server() {
+    async fn get_all_posts(State(client): State<reqwest::Client>) -> Json<Vec<Post>> {
+        client
+            .get("https://jsonplaceholder.typicode.com/posts")
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<Post>>()
+            .await
+            .unwrap()
+            .into()
+    }
+    async fn get_post_by_id(
+        State(client): State<reqwest::Client>,
+        Path(id): Path<u32>,
+    ) -> Json<Option<Post>> {
+        client
+            .get(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+            .send()
+            .await
+            .unwrap()
+            .json::<Option<Post>>()
+            .await
+            .unwrap()
+            .into()
+    }
+    async fn get_all_post_comments_by_id(
+        State(client): State<reqwest::Client>,
+        Path(id): Path<u32>,
+    ) -> Json<Vec<Comment>> {
+        client
+            .get(format!(
+                "https://jsonplaceholder.typicode.com/posts/{}/comments",
+                id
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<Comment>>()
+            .await
+            .unwrap()
+            .into()
+    }
+    async fn create_post(State(client): State<reqwest::Client>, Json(post): Json<Post>) -> () {
+        client
+            .post("https://jsonplaceholder.typicode.com/posts")
+            .json(&post)
+            .send()
+            .await
+            .unwrap();
+    }
+    async fn update_post_by_id(
+        State(client): State<reqwest::Client>,
+        Path(id): Path<u32>,
+        Json(post): Json<Post>,
+    ) -> () {
+        client
+            .put(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+            .json(&post)
+            .send()
+            .await
+            .unwrap();
+    }
+    async fn delete_post_by_id(State(client): State<reqwest::Client>, Path(id): Path<u32>) -> () {
+        client
+            .delete(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+            .send()
+            .await
+            .unwrap();
+    }
+    #[derive(serde::Deserialize, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Post {
+        id: u32,
+        title: String,
+        body: String,
+        user_id: u32,
+    }
+
+    #[derive(serde::Deserialize, serde::Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Comment {
+        post_id: u32,
+        id: u32,
+        name: String,
+        email: String,
+        body: String,
+    }
+
     let client = reqwest::Client::new();
 
     let app = Router::new()
@@ -134,93 +222,6 @@ pub async fn posts_server() {
     println!("Listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app).await.unwrap();
-}
-async fn get_all_posts(State(client): State<reqwest::Client>) -> Json<Vec<Post>> {
-    client
-        .get("https://jsonplaceholder.typicode.com/posts")
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Post>>()
-        .await
-        .unwrap()
-        .into()
-}
-async fn get_post_by_id(
-    State(client): State<reqwest::Client>,
-    Path(id): Path<u32>,
-) -> Json<Option<Post>> {
-    client
-        .get(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
-        .send()
-        .await
-        .unwrap()
-        .json::<Option<Post>>()
-        .await
-        .unwrap()
-        .into()
-}
-async fn get_all_post_comments_by_id(
-    State(client): State<reqwest::Client>,
-    Path(id): Path<u32>,
-) -> Json<Vec<Comment>> {
-    client
-        .get(format!(
-            "https://jsonplaceholder.typicode.com/posts/{}/comments",
-            id
-        ))
-        .send()
-        .await
-        .unwrap()
-        .json::<Vec<Comment>>()
-        .await
-        .unwrap()
-        .into()
-}
-async fn create_post(State(client): State<reqwest::Client>, Json(post): Json<Post>) -> () {
-    client
-        .post("https://jsonplaceholder.typicode.com/posts")
-        .json(&post)
-        .send()
-        .await
-        .unwrap();
-}
-async fn update_post_by_id(
-    State(client): State<reqwest::Client>,
-    Path(id): Path<u32>,
-    Json(post): Json<Post>,
-) -> () {
-    client
-        .put(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
-        .json(&post)
-        .send()
-        .await
-        .unwrap();
-}
-async fn delete_post_by_id(State(client): State<reqwest::Client>, Path(id): Path<u32>) -> () {
-    client
-        .delete(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
-        .send()
-        .await
-        .unwrap();
-}
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Post {
-    id: u32,
-    title: String,
-    body: String,
-    user_id: u32,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Comment {
-    post_id: u32,
-    id: u32,
-    name: String,
-    email: String,
-    body: String,
 }
 
 ///
