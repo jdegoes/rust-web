@@ -3,6 +3,7 @@
         "axum",
         "oneshot",
         "prometheus",
+        "reqwest",
         "tokio"
     ],
     "files.exclude": {

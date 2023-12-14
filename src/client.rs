@@ -36,10 +36,8 @@ use axum::{
 /// `json` feature, you can call the `json` method on the response to
 /// deserialize the response into any type T that implements `serde::Deserialize`.
 ///
-///
-///
 pub async fn cat_fact_server() {
-    let app = Router::<()>::new().route("/", get(cat_fact_handler));
+    let app = Router::<()>::new().route("/", get(cat_fact_handler_proper));
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -49,10 +47,33 @@ pub async fn cat_fact_server() {
 
     axum::serve(listener, app).await.unwrap();
 }
-async fn cat_fact_handler() -> Html<String> {
-    todo!("Using reqwest::get and .json, get a random cat fact from https://catfact.ninja/fact and return it as an HTML response.")
+
+async fn cat_fact_handler_json() -> Json<CatFact> {
+    reqwest::get("https://catfact.ninja/fact")
+        .await
+        .unwrap()
+        .json::<CatFact>()
+        .await
+        .map(|cf| Json(cf))
+        .unwrap()
 }
-#[derive(serde::Deserialize)]
+
+async fn cat_fact_handler_proper() -> Html<String> {
+    let r = reqwest::get("https://catfact.ninja/fact")
+        .await
+        .unwrap()
+        .json::<CatFact>()
+        .await
+        .unwrap();
+
+    let html = format!(
+        "<html><body><h1>Random cat fact</h1><p>{}</p></body></html>",
+        r.fact
+    );
+    Html(html)
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
 struct CatFact {
     fact: String,
     length: u32,
@@ -106,6 +127,7 @@ async fn posts_server() {
 
     axum::serve(listener, app).await.unwrap();
 }
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Post {
@@ -114,6 +136,7 @@ struct Post {
     body: String,
     user_id: u32,
 }
+
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Comment {
