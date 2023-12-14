@@ -19,13 +19,15 @@
 //! In this section, you will explore these mechanisms.
 //!
 
+use axum::extract::Path;
 #[allow(unused_imports)]
 use axum::extract::State;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
+use axum::{Extension, Json};
 #[allow(unused_imports)]
 use hyper::Request;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 ///
@@ -449,11 +451,12 @@ async fn extension_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let gbp_to_usd_rate = 1.3;
 
     let _app = Router::new()
         .route("/usd_to_gbp", get(extension_usd_to_gbp_handler))
-        .route("/gbp_to_usd", get(extension_gbp_to_usd_handler));
+        .route("/gbp_to_usd", get(extension_gbp_to_usd_handler))
+        .layer(Extension(gbp_to_usd_rate));
 
     let response = _app
         .oneshot(
@@ -472,11 +475,13 @@ async fn extension_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn extension_usd_to_gbp_handler() -> String {
-    todo!("Use Extensions to access the exchange rate")
+
+async fn extension_usd_to_gbp_handler(Extension(rate): Extension<f64>, usd: String) -> String {
+    convert_usd_to_gbp(usd, rate)
 }
-async fn extension_gbp_to_usd_handler() -> String {
-    todo!("Use Extensions to access the exchange rate")
+
+async fn extension_gbp_to_usd_handler(Extension(rate): Extension<f64>, gbp: String) -> String {
+    convert_gbp_to_usd(gbp, rate)
 }
 
 ///
@@ -494,6 +499,69 @@ async fn extension_gbp_to_usd_handler() -> String {
 ///
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
-async fn run_users_server() {
-    todo!("Implement the users API")
+pub async fn run_users_server() {
+    #[derive(serde::Serialize, serde::Deserialize, Clone)]
+    struct User {
+        id: u64,
+        name: String,
+        age: Option<u8>,
+    }
+
+    type DB = Arc<Mutex<HashMap<u64, User>>>;
+
+    let database: DB = Arc::new(Mutex::new(HashMap::new()));
+
+    async fn get_users_handler(State(db): State<DB>) -> Json<Vec<User>> {
+        let db = db.lock().await;
+        Json(db.values().cloned().collect())
+    }
+
+    async fn get_user_handler(State(db): State<DB>, Path(id): Path<u64>) -> Json<Option<User>> {
+        let db = db.lock().await;
+        Json(db.get(&id).cloned())
+    }
+
+    async fn create_user_handler(
+        State(db): State<DB>,
+        Json(user): Json<User>,
+    ) -> Json<Option<User>> {
+        let mut db = db.lock().await;
+        let id = user.id;
+        db.insert(id, user.clone());
+        Json(db.get(&id).cloned())
+    }
+
+    async fn update_user_handler(
+        State(db): State<DB>,
+        Path(id): Path<u64>,
+        Json(user): Json<User>,
+    ) -> Json<Option<User>> {
+        let mut db = db.lock().await;
+        db.insert(id, user.clone());
+        Json(db.get(&id).cloned())
+    }
+
+    async fn delete_user_handler(State(db): State<DB>, Path(id): Path<u64>) -> Json<Option<User>> {
+        let mut db = db.lock().await;
+        Json(db.remove(&id))
+    }
+
+    let user_routes: Router = Router::new()
+        .route("/", get(get_users_handler))
+        .route("/:id", get(get_user_handler))
+        .route("/", post(create_user_handler))
+        .route("/:id", put(update_user_handler))
+        .route("/:id", delete(delete_user_handler))
+        .with_state(database);
+
+    let app = Router::new().nest("/users", user_routes);
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
 }

@@ -14,7 +14,8 @@ async fn main() {
     // basics::hello_world().await;
     // handlers::run_users_server().await;
     // middleware::prometheus_metrics_middleware().await;
-    context::start_router_mutable_context().await;
+    // context::start_router_mutable_context().await;
+    context::run_users_server().await;
 
     // println!("Hello, world!");
 }
