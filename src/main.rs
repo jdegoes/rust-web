@@ -16,7 +16,8 @@ async fn main() {
     // middleware::prometheus_metrics_middleware().await;
     // context::start_router_mutable_context().await;
     // context::run_users_server().await;
-    client::cat_fact_server().await;
+    // client::cat_fact_server().await;
+    client::posts_server().await;
 
     // println!("Hello, world!");
 }

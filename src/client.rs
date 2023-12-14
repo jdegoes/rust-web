@@ -16,6 +16,7 @@
 
 use axum::{
     body::Body,
+    extract::{Path, State},
     http::{Method, Request},
     response::Html,
     routing::*,
@@ -114,10 +115,17 @@ struct CatFact {
 /// One has been provided for you in the `posts_server` function. You can
 /// set the body of a request using the `.body` method.`
 ///
-async fn posts_server() {
-    let app = Router::<()>::new();
+pub async fn posts_server() {
+    let client = reqwest::Client::new();
 
-    let _client = reqwest::Client::new();
+    let app = Router::new()
+        .route("/posts", get(get_all_posts))
+        .route("/posts/:id", get(get_post_by_id))
+        .route("/posts/:id/comments", get(get_all_post_comments_by_id))
+        .route("/posts", post(create_post))
+        .route("/posts/:id", put(update_post_by_id))
+        .route("/posts/:id", delete(delete_post_by_id))
+        .with_state(client);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -127,7 +135,75 @@ async fn posts_server() {
 
     axum::serve(listener, app).await.unwrap();
 }
-
+async fn get_all_posts(State(client): State<reqwest::Client>) -> Json<Vec<Post>> {
+    client
+        .get("https://jsonplaceholder.typicode.com/posts")
+        .send()
+        .await
+        .unwrap()
+        .json::<Vec<Post>>()
+        .await
+        .unwrap()
+        .into()
+}
+async fn get_post_by_id(
+    State(client): State<reqwest::Client>,
+    Path(id): Path<u32>,
+) -> Json<Option<Post>> {
+    client
+        .get(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+        .send()
+        .await
+        .unwrap()
+        .json::<Option<Post>>()
+        .await
+        .unwrap()
+        .into()
+}
+async fn get_all_post_comments_by_id(
+    State(client): State<reqwest::Client>,
+    Path(id): Path<u32>,
+) -> Json<Vec<Comment>> {
+    client
+        .get(format!(
+            "https://jsonplaceholder.typicode.com/posts/{}/comments",
+            id
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<Vec<Comment>>()
+        .await
+        .unwrap()
+        .into()
+}
+async fn create_post(State(client): State<reqwest::Client>, Json(post): Json<Post>) -> () {
+    client
+        .post("https://jsonplaceholder.typicode.com/posts")
+        .json(&post)
+        .send()
+        .await
+        .unwrap();
+}
+async fn update_post_by_id(
+    State(client): State<reqwest::Client>,
+    Path(id): Path<u32>,
+    Json(post): Json<Post>,
+) -> () {
+    client
+        .put(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+        .json(&post)
+        .send()
+        .await
+        .unwrap();
+}
+async fn delete_post_by_id(State(client): State<reqwest::Client>, Path(id): Path<u32>) -> () {
+    client
+        .delete(format!("https://jsonplaceholder.typicode.com/posts/{}", id))
+        .send()
+        .await
+        .unwrap();
+}
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Post {
