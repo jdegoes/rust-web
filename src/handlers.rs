@@ -19,9 +19,9 @@
 //! and interact with paths in a route definition.
 //!
 
-use axum::Json;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
+use axum::Json;
 use axum::{body::Body, extract::Path};
 use axum::{http::Method, routing::*};
 use hyper::{Request, StatusCode};
@@ -321,7 +321,7 @@ async fn query_handler_test() {
 
     assert_eq!(body_as_string, "age=42&name=jdoe");
 }
-use axum::extract::{Query, FromRequestParts, FromRequest};
+use axum::extract::{FromRequest, FromRequestParts, Query};
 async fn query_handler(Query(QueryParams { name, age }): Query<QueryParams>) -> String {
     format!("age={}&name={}", age, name)
 }
@@ -606,17 +606,19 @@ struct UserDetails {
 }
 use async_trait::async_trait;
 #[async_trait]
-impl <S> FromRequestParts<S> for UserDetails {
+impl<S> FromRequestParts<S> for UserDetails {
     type Rejection = String;
 
     /// Perform the extraction.
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(UserDetails { username: parts.uri.query().unwrap_or("").to_string() })
+        Ok(UserDetails {
+            username: parts.uri.query().unwrap_or("").to_string(),
+        })
     }
 }
 enum UserDetailsResponse {
     UserNotFound,
-    Confirmed(String)
+    Confirmed(String),
 }
 impl IntoResponse for UserDetailsResponse {
     fn into_response(self) -> Response {
@@ -688,50 +690,77 @@ async fn result_handler() -> () {
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
 pub async fn run_users_server() {
-     // build our application with a route
-     let app = Router::new()
+    // build our application with a route
+    let app = Router::new()
         .route("/users/", get(list_users))
         .route("/users/:id", get(get_user_by_id))
         .route("/users/", post(create_user))
         .route("/users/:id", put(update_user))
         .route("/users/:id", delete(delete_user));
 
-     // run it
-     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-         .await
-         .unwrap();
- 
-     println!("Listening on {}", listener.local_addr().unwrap());
- 
-     axum::serve(listener, app).await.unwrap();
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
 }
 async fn list_users() -> Json<Vec<User>> {
     Json(vec![
-        User { id: 1, name: "John Doe".to_string() },
-        User { id: 2, name: "Jane Doe".to_string() },
+        User {
+            id: 1,
+            name: "John Doe".to_string(),
+        },
+        User {
+            id: 2,
+            name: "Jane Doe".to_string(),
+        },
     ])
 }
 async fn get_user_by_id(Path(id): Path<u32>) -> Json<Option<User>> {
     Json(match id {
-        1 => Some(User { id: 1, name: "John Doe".to_string() }),
-        2 => Some(User { id: 2, name: "Jane Doe".to_string() }),
+        1 => Some(User {
+            id: 1,
+            name: "John Doe".to_string(),
+        }),
+        2 => Some(User {
+            id: 2,
+            name: "Jane Doe".to_string(),
+        }),
         _ => None,
     })
 }
 async fn create_user(Json(user): Json<User>) -> Json<User> {
-    Json(User { id: 3, name: user.name })
+    Json(User {
+        id: 3,
+        name: user.name,
+    })
 }
 async fn update_user(Path(id): Path<u32>, Json(user): Json<User>) -> Json<Option<User>> {
     Json(match id {
-        1 => Some(User { id: 1, name: user.name }),
-        2 => Some(User { id: 2, name: user.name }),
+        1 => Some(User {
+            id: 1,
+            name: user.name,
+        }),
+        2 => Some(User {
+            id: 2,
+            name: user.name,
+        }),
         _ => None,
     })
 }
 async fn delete_user(Path(id): Path<u32>) -> Json<Option<User>> {
     Json(match id {
-        1 => Some(User { id: 1, name: "John Doe".to_string() }),
-        2 => Some(User { id: 2, name: "Jane Doe".to_string() }),
+        1 => Some(User {
+            id: 1,
+            name: "John Doe".to_string(),
+        }),
+        2 => Some(User {
+            id: 2,
+            name: "Jane Doe".to_string(),
+        }),
         _ => None,
     })
 }

@@ -24,11 +24,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::extract::Path;
-use axum::{Extension, Json};
 #[allow(unused_imports)]
 use axum::extract::State;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
+use axum::{Extension, Json};
 #[allow(unused_imports)]
 use hyper::Request;
 use tokio::sync::Mutex;
@@ -52,8 +52,14 @@ async fn closure_shared_context() {
     let gbp_to_usd_rate = 1.3;
 
     let _app = Router::<()>::new()
-        .route("/usd_to_gbp", get(move |usd: String| async move { convert_usd_to_gbp(usd, gbp_to_usd_rate)}))
-        .route("/gbp_to_usd", get(move |gbp: String| async move { convert_gbp_to_usd(gbp, gbp_to_usd_rate)}));
+        .route(
+            "/usd_to_gbp",
+            get(move |usd: String| async move { convert_usd_to_gbp(usd, gbp_to_usd_rate) }),
+        )
+        .route(
+            "/gbp_to_usd",
+            get(move |gbp: String| async move { convert_gbp_to_usd(gbp, gbp_to_usd_rate) }),
+        );
 
     let response = _app
         .oneshot(
@@ -115,10 +121,10 @@ async fn shared_mutable_context() {
     let rate2 = _gbp_to_usd_rate.clone();
     let rate3 = _gbp_to_usd_rate.clone();
 
-    let _app = Router::<()>::new()    
+    let _app = Router::<()>::new()
         .route(
             "/usd_to_gbp",
-            get(|usd: String| async move {                 
+            get(|usd: String| async move {
                 let mut locked = rate1.lock().await;
 
                 *locked = 1.4;
@@ -128,17 +134,17 @@ async fn shared_mutable_context() {
         )
         .route(
             "/gbp_to_usd",
-            get(|gbp: String| async move { 
+            get(|gbp: String| async move {
                 let mut locked = rate2.lock().await;
 
                 *locked = 1.5;
 
-                convert_gbp_to_usd(gbp, *locked) 
+                convert_gbp_to_usd(gbp, *locked)
             }),
         )
         .route(
             "/usd_to_gbp_rate",
-            get(|_: ()| async move { 
+            get(|_: ()| async move {
                 let locked = rate3.lock().await;
 
                 format!("{}", *locked)
@@ -258,14 +264,14 @@ async fn mutable_state_shared_context() {
 }
 async fn mutable_usd_to_gbp_handler(State(arc): State<Arc<Mutex<f64>>>, usd: String) -> String {
     let mut locked = arc.lock().await;
-    
+
     *locked = 1.4;
 
     convert_usd_to_gbp(usd, *locked)
 }
 async fn mutable_gbp_to_usd_handler(State(arc): State<Arc<Mutex<f64>>>, usd: String) -> String {
     let mut locked = arc.lock().await;
-    
+
     *locked = 1.5;
 
     convert_gbp_to_usd(usd, *locked)
@@ -312,10 +318,22 @@ async fn generic_state_shared_context() {
     use tower::util::ServiceExt;
 
     let _app: Router<()> = Router::new()
-        .route("/usd_to_gbp", get(generic_usd_to_gbp_handler::<AllExchangeRates>))
-        .route("/gbp_to_usd", get(generic_gbp_to_usd_handler::<AllExchangeRates>))
-        .route("/eur_to_usd", get(generic_eur_to_usd_handler::<AllExchangeRates>))
-        .route("/usd_to_eur", get(generic_usd_to_eur_handler::<AllExchangeRates>))
+        .route(
+            "/usd_to_gbp",
+            get(generic_usd_to_gbp_handler::<AllExchangeRates>),
+        )
+        .route(
+            "/gbp_to_usd",
+            get(generic_gbp_to_usd_handler::<AllExchangeRates>),
+        )
+        .route(
+            "/eur_to_usd",
+            get(generic_eur_to_usd_handler::<AllExchangeRates>),
+        )
+        .route(
+            "/usd_to_eur",
+            get(generic_usd_to_eur_handler::<AllExchangeRates>),
+        )
         .with_state(AllExchangeRates {
             gbp_to_usd: GBPtoUSD(1.3),
             eur_to_usd: EURtoUSD(1.2),
@@ -467,11 +485,11 @@ async fn run_users_server() {
     let state: Arc<UsersState> = Arc::new(UsersState {
         map: Mutex::new(HashMap::new()),
     });
-    
+
     let app = Router::new()
-        .route("/users",     get(get_users_handler))
+        .route("/users", get(get_users_handler))
         .route("/users/:id", get(get_user_by_id))
-        .route("/users",     post(create_user))
+        .route("/users", post(create_user))
         .route("/users/:id", put(update_user_by_id))
         .route("/users/:id", delete(delete_user_by_id))
         .with_state(state);
@@ -487,19 +505,26 @@ async fn run_users_server() {
 async fn get_users_handler(State(state): State<Arc<UsersState>>) -> Json<Vec<User>> {
     let map = state.map.lock().await;
 
-    Json(map.values().map(|x| { x.clone() }).collect())
+    Json(map.values().map(|x| x.clone()).collect())
 }
-async fn get_user_by_id(State(state): State<Arc<UsersState>>, Path(id): Path<String>) -> Json<Option<User>> {
+async fn get_user_by_id(
+    State(state): State<Arc<UsersState>>,
+    Path(id): Path<String>,
+) -> Json<Option<User>> {
     let map = state.map.lock().await;
 
-    Json(map.get(&id).map(|x| { x.clone() }))
+    Json(map.get(&id).map(|x| x.clone()))
 }
 async fn create_user(State(state): State<Arc<UsersState>>, Json(user): Json<User>) -> () {
     let mut map = state.map.lock().await;
 
     map.insert(user.id.clone(), user.clone());
 }
-async fn update_user_by_id(State(state): State<Arc<UsersState>>, Path(id): Path<String>, Json(user): Json<User>) -> () {
+async fn update_user_by_id(
+    State(state): State<Arc<UsersState>>,
+    Path(id): Path<String>,
+    Json(user): Json<User>,
+) -> () {
     let mut map = state.map.lock().await;
 
     map.insert(id.clone(), user.clone());

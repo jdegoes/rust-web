@@ -58,8 +58,7 @@ async fn tracing_middleware() {
     #![allow(unused_imports)]
     use tower_http::trace::TraceLayer;
 
-    let layer = 
-        TraceLayer::new_for_http();
+    let layer = TraceLayer::new_for_http();
 
     let _app = Router::<()>::new().layer(layer);
 }
@@ -92,7 +91,7 @@ async fn auth_middleware() {
     #[allow(unused_imports)]
     use tower_http::validate_request::ValidateRequestHeaderLayer;
 
-    let layer: ValidateRequestHeaderLayer<Basic<Body>> = 
+    let layer: ValidateRequestHeaderLayer<Basic<Body>> =
         ValidateRequestHeaderLayer::basic("foo", "bar");
 
     let _app = Router::<()>::new()
@@ -136,8 +135,7 @@ async fn timeout_middleware() {
     #![allow(unused_imports)]
     use tower_http::timeout::TimeoutLayer;
 
-    let layer = 
-        TimeoutLayer::new(Duration::from_secs(5));
+    let layer = TimeoutLayer::new(Duration::from_secs(5));
 
     let _app = Router::<()>::new().layer(layer);
 
@@ -165,9 +163,7 @@ async fn cors_middleware() {
 
     use tower_http::cors::{Any, CorsLayer};
 
-    let layer = CorsLayer::new()
-        .allow_methods(Any)
-        .allow_origin(Any);
+    let layer = CorsLayer::new().allow_methods(Any).allow_origin(Any);
 
     let _app = Router::<()>::new().layer(layer);
 
@@ -197,8 +193,7 @@ async fn basic_metrics_middleware() {
     #![allow(unused_imports)]
     use tower_http::metrics::InFlightRequestsLayer;
 
-    let (layer, _counter) = 
-        InFlightRequestsLayer::pair();
+    let (layer, _counter) = InFlightRequestsLayer::pair();
 
     let _app = Router::<()>::new().layer(layer);
 
