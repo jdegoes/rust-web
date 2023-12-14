@@ -14,7 +14,7 @@ async fn main() {
 
     // basics::hello_world().await;
 
-    handlers::run_users_server().await;
+    client::cat_fact_server().await;
 
     println!("Hello, world!");
 }

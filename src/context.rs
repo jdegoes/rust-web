@@ -311,7 +311,7 @@ async fn generic_state_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _app = Router::new()
+    let _app: Router<()> = Router::new()
         .route("/usd_to_gbp", get(generic_usd_to_gbp_handler::<AllExchangeRates>))
         .route("/gbp_to_usd", get(generic_gbp_to_usd_handler::<AllExchangeRates>))
         .route("/eur_to_usd", get(generic_eur_to_usd_handler::<AllExchangeRates>))

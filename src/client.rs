@@ -19,7 +19,7 @@ use axum::{
     http::{Method, Request},
     response::Html,
     routing::*,
-    Json, Router,
+    Json, Router, extract::Path,
 };
 
 ///
@@ -50,7 +50,16 @@ pub async fn cat_fact_server() {
     axum::serve(listener, app).await.unwrap();
 }
 async fn cat_fact_handler() -> Html<String> {
-    todo!("Using reqwest::get and .json, get a random cat fact from https://catfact.ninja/fact and return it as an HTML response.")
+    let cat_fact = reqwest::get("https://catfact.ninja/fact")
+        .await 
+        .unwrap()
+        .json::<CatFact>()
+        .await
+        .unwrap();
+
+    let html = format!("<h1>Random Cat Fact</h1><p>{}</p>", cat_fact.fact);
+
+    Html(html)
 }
 #[derive(serde::Deserialize)]
 struct CatFact {
@@ -94,10 +103,16 @@ struct CatFact {
 /// set the body of a request using the `.body` method.`
 ///
 async fn posts_server() {
-    let app = Router::<()>::new();
+    let app = Router::<()>::new()
+        .route("/posts",                get(get_all_posts))
+        .route("/posts/:id",            get(get_post_by_id))
+        .route("/posts/:id/comments",   get(get_all_post_comments_by_id))
+        .route("/posts",                post(create_post))
+        .route("/posts/:id",            put(update_post_by_id))
+        .route("/posts/:id",            delete(delete_post_by_id));
 
     let _client = reqwest::Client::new();
-
+    
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
@@ -105,6 +120,24 @@ async fn posts_server() {
     println!("Listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app).await.unwrap();
+}
+async fn get_all_posts() -> Json<Vec<Post>> {
+    todo!()
+}
+async fn get_post_by_id(Path(id): Path<u32>) -> Json<Option<Post>> {
+    todo!()
+}
+async fn get_all_post_comments_by_id(Path(id): Path<u32>) -> Json<Vec<Comment>> {
+    todo!()
+}
+async fn create_post(post: Json<Post>) -> () {
+    todo!()
+}
+async fn update_post_by_id(Path(id): Path<u32>, post: Json<Post>) -> () {
+    todo!()
+}
+async fn delete_post_by_id(Path(id): Path<u32>) -> () {
+    todo!()
 }
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
