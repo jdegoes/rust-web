@@ -16,6 +16,7 @@
 //! in other languages that have long been used for building web apps.
 //!
 
+use async_openai::{config::OpenAIConfig, types::CreateCompletionRequestArgs};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
@@ -215,13 +216,13 @@ trait TodoService {
 
 #[async_trait::async_trait]
 trait TodoAI {
-    async fn infer_title(&self, todo: &Todo) -> Option<String>;
+    async fn infer_title(&self, description: &String) -> Option<String>;
 
-    async fn infer_deadline(&self, todo: &Todo) -> Option<NaiveDateTime>;
+    async fn infer_deadline(&self, description: &String) -> Option<NaiveDateTime>;
 
-    async fn infer_priority(&self, todo: &Todo) -> Option<Priority>;
+    async fn infer_priority(&self, description: &String) -> Option<Priority>;
 
-    async fn infer_tags(&self, todo: &Todo) -> Option<String>;
+    async fn infer_tags(&self, description: &String) -> Option<String>;
 }
 
 //
@@ -352,6 +353,103 @@ impl TodoRepo for PostgresTodoRepo {
             }),
             None => None,
         }
+    }
+}
+
+pub struct OpenAITodoAI {
+    client: async_openai::Client<OpenAIConfig>,
+}
+impl OpenAITodoAI {
+    pub fn new(client: async_openai::Client<OpenAIConfig>) -> Self {
+        Self { client }
+    }
+}
+/*
+// Create request using builder pattern
+ // Every request struct has companion builder struct with same name + Args suffix
+ let request = CreateCompletionRequestArgs::default()
+     .model("text-davinci-003")
+     .prompt("Tell me the recipe of alfredo pasta")
+     .max_tokens(40_u16)
+     .build()
+     .unwrap();
+
+ // Call API
+ let response = client
+     .completions()      // Get the API "group" (completions, images, etc.) from the client
+     .create(request)    // Make the API call in that "group"
+     .await
+     .unwrap();
+ */
+#[async_trait::async_trait]
+impl TodoAI for OpenAITodoAI {
+    async fn infer_title(&self, description: &String) -> Option<String> {
+        let prompt = 
+            format!("I need you to infer a short title (200 characters max) for the following todo description. Please 
+                reply ONLY with the title and do not explain yourself in any way. Description: {}", description);
+
+        let request = CreateCompletionRequestArgs::default()
+            .model("text-davinci-003")
+            .prompt(prompt)
+            .max_tokens(40_u16)
+            .build()
+            .unwrap();
+   
+        let response = self.client
+            .completions()
+            .create(request)
+            .await
+            .unwrap();
+
+        response.choices.first().map(|first| { return first.text.clone() })
+    }
+
+    async fn infer_deadline(&self, description: &String) -> Option<NaiveDateTime> {
+        None
+    }
+
+    async fn infer_priority(&self, description: &String) -> Option<Priority> {
+        let prompt = 
+            format!("I am going to give you a description for a TODO. I want you to reply with an estimated priority for the TODO,
+            ranging from 0 (low priority) to 1 (medium priority) to 2 (high priority). Only reply with the number 1, 2, or 3,
+            depending on how you estimate the priority of the TODO. Description: {}", description);
+
+        let request = CreateCompletionRequestArgs::default()
+            .model("text-davinci-003")
+            .prompt(prompt)
+            .max_tokens(40_u16)
+            .build()
+            .unwrap();
+   
+        let response = self.client
+            .completions()
+            .create(request)
+            .await
+            .unwrap();
+
+        response.choices.first().map(|first| { return first.text.clone().parse::<i16>().unwrap().into() })
+    }
+
+    async fn infer_tags(&self, description: &String) -> Option<String> {
+        let prompt = 
+            format!("I need you to infer a comma-separated list of tags that describe the high-level concepts 
+             related to the following TODO description. Only reply with the comma-separated list of tags. Each tag
+             should be a single word (no symbols). Description: {}", description);
+
+        let request = CreateCompletionRequestArgs::default()
+            .model("text-davinci-003")
+            .prompt(prompt)
+            .max_tokens(40_u16)
+            .build()
+            .unwrap();
+   
+        let response = self.client
+            .completions()
+            .create(request)
+            .await
+            .unwrap();
+
+        response.choices.first().map(|first| { return first.text.clone() })
     }
 }
 
