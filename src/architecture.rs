@@ -15,6 +15,10 @@
 //! itself, as well as learning lessons from modularity and testability
 //! in other languages that have long been used for building web apps.
 //!
+//!
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 //
 // EXERCISE 1
@@ -37,6 +41,34 @@
 // `Debug`, `PartialEq`, `Serialize`, and `Deserialize`.
 //
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Todo {
+    id: u64,
+    title: String,
+    description: String,
+    status: Status,
+    priority: Priority,
+    created_at: DateTime<Utc>,
+    deadline: Option<DateTime<Utc>>,
+    tags: Vec<String>,
+    subtasks: Vec<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum Status {
+    Todo,
+    InProgress,
+    Complete,
+    Aborted,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+enum Priority {
+    Low,
+    Medium,
+    High,
+}
+
 //
 // EXERCISE 2
 // ----------
@@ -53,6 +85,10 @@
 // on your Postgres database so you are ready to proceed to the next
 // step.
 //
+
+// DONE with migration
+// $> sqlx migrate add todo_app
+// $> sqlx migrate run
 
 //
 // EXERCISE 3
