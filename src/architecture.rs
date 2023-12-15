@@ -16,6 +16,10 @@
 //! in other languages that have long been used for building web apps.
 //!
 
+use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres};
+
 //
 // EXERCISE 1
 // ----------
@@ -36,6 +40,89 @@
 // structures, deriving implementations for traits like `Clone`,
 // `Debug`, `PartialEq`, `Serialize`, and `Deserialize`.
 //
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreateTodo {
+    title: String,
+    description: String,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
+    priority: Priority,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UpdateTodo {
+    title: String,
+    description: String,
+    status: Status,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
+    priority: Priority,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Todo {
+    id: TodoId,
+    title: String,
+    description: String,
+    status: Status,
+    created_at: NaiveDateTime,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
+    priority: Priority,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Status {
+    Todo,
+    InProgress,
+    Done,
+    Cancelled,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum Priority {
+    Low,
+    Medium,
+    High,
+}
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TodoId(i64);
+impl From<i16> for Priority {
+    fn from(i: i16) -> Self {
+        match i {
+            0 => Self::Low,
+            1 => Self::Medium,
+            2 => Self::High,
+            _ => panic!("Invalid priority value"),
+        }
+    }
+}
+impl Into<i16> for Priority {
+    fn into(self) -> i16 {
+        match self {
+            Self::Low => 0,
+            Self::Medium => 1,
+            Self::High => 2,
+        }
+    }
+}
+impl From<i16> for Status {
+    fn from(i: i16) -> Self {
+        match i {
+            0 => Self::Todo,
+            1 => Self::InProgress,
+            2 => Self::Done,
+            3 => Self::Cancelled,
+            _ => panic!("Invalid status value"),
+        }
+    }
+}
+impl Into<i16> for Status {
+    fn into(self) -> i16 {
+        match self {
+            Self::Todo => 0,
+            Self::InProgress => 1,
+            Self::Done => 2,
+            Self::Cancelled => 3,
+        }
+    }
+}
 
 //
 // EXERCISE 2
@@ -98,6 +185,44 @@
 // by your application logic. Can you think of any patterns from other
 // programming languages that might be useful here?
 //
+#[async_trait::async_trait]
+trait TodoRepo {
+    async fn create(&self, create_todo: CreateTodo) -> Todo;
+
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
+
+    async fn delete_by_id(&self, id: TodoId) -> bool;
+
+    async fn get_all(&self) -> Vec<Todo>;
+
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo>;
+}
+
+#[async_trait::async_trait]
+trait TodoService {
+    // async fn create_many(&self, text: String) -> Vec<Todo>;
+
+    async fn create(&self, description: String) -> Todo;
+
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
+
+    async fn delete_by_id(&self, id: TodoId) -> bool;
+
+    async fn get_all(&self) -> Vec<Todo>;
+
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo>;
+}
+
+#[async_trait::async_trait]
+trait TodoAI {
+    async fn infer_title(&self, todo: &Todo) -> Option<String>;
+
+    async fn infer_deadline(&self, todo: &Todo) -> Option<NaiveDateTime>;
+
+    async fn infer_priority(&self, todo: &Todo) -> Option<Priority>;
+
+    async fn infer_tags(&self, todo: &Todo) -> Option<String>;
+}
 
 //
 // EXERCISE 4
@@ -111,6 +236,60 @@
 // talk to Axum and SQLx, but they will be hidden behind the traits
 // you designed in the previous exercise.
 //
+pub struct PostgresTodoRepo {
+    pool: Pool<Postgres>,
+}
+
+impl PostgresTodoRepo {
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait::async_trait]
+impl TodoRepo for PostgresTodoRepo {
+    async fn create(&self, create_todo: CreateTodo) -> Todo {
+        let priority: i16 = create_todo.priority.into();
+        let status: i16 = Status::Todo.into();
+
+        let result = sqlx::query!(
+            "INSERT INTO todos (title, description, status, deadline, tags, priority) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, title, description, status, created_at, deadline, tags, priority",
+            create_todo.title,
+            create_todo.description,
+            status,
+            create_todo.deadline,
+            create_todo.tags,
+            priority,
+        ).fetch_one(&self.pool).await.unwrap();
+
+        Todo {
+            id: TodoId(result.id),
+            title: result.title,
+            description: result.description.unwrap_or("".to_string()),
+            status: Status::from(result.status),
+            created_at: result.created_at,
+            deadline: result.deadline,
+            tags: result.tags,
+            priority: Priority::from(result.priority),
+        }
+    }
+
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo> {
+        todo!()
+    }
+
+    async fn delete_by_id(&self, id: TodoId) -> bool {
+        todo!()
+    }
+
+    async fn get_all(&self) -> Vec<Todo> {
+        todo!()
+    }
+
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo> {
+        todo!()
+    }
+}
 
 //
 // EXERCISE 5
