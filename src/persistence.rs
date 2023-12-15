@@ -1,4 +1,4 @@
-#![cfg(feature = "persistence")]
+// #![cfg(feature = "persistence")]
 #![allow(dead_code)]
 #![allow(unreachable_code)]
 #![allow(unused_imports)]
@@ -51,9 +51,9 @@ use sqlx::{postgres::PgPoolOptions, Postgres};
 /// methods.
 ///
 async fn query_playground() {
-    // let _ = sqlx::query!("SELECT 1 + 1 AS sum");
+    let _ = sqlx::query!("SELECT 1 + 1 AS sum");
 
-    let _ = sqlx::query::<Postgres>("SELECT 1 + 1 AS sum");
+    let _ = sqlx::query::<Postgres>("SELECT 1 + 'john' AS sum");
 }
 
 ///
@@ -67,15 +67,22 @@ async fn query_playground() {
 ///
 #[tokio::test]
 async fn select_one_plus_one() {
-    let _pool = PgPoolOptions::new()
+    dotenv::dotenv().ok();
+
+    let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
         .await
         .unwrap();
 
-    let _sum: i32 = todo!("Insert row here");
+    let sum: i32 = sqlx::query!("SELECT 1 + 1 AS sum")
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+        .sum
+        .unwrap();
 
-    assert_eq!(_sum, 2);
+    assert_eq!(sum, 2);
 }
 
 ///
@@ -91,13 +98,22 @@ async fn select_one_plus_one() {
 ///
 #[tokio::test]
 async fn select_star() {
-    let _pool = PgPoolOptions::new()
+    dotenv::dotenv().ok();
+
+    let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
         .await
         .unwrap();
 
-    todo!("Insert query here");
+    let result = sqlx::query!("SELECT * FROM todos")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+
+    for row in result {
+        println!("{:?}", row);
+    }
 
     assert!(true);
 }
@@ -118,6 +134,8 @@ async fn select_star() {
 ///
 #[tokio::test]
 async fn insert_todo() {
+    dotenv::dotenv().ok();
+
     let _pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
@@ -128,7 +146,18 @@ async fn insert_todo() {
     let _description = "I should really learn SQLx for my Axum web app";
     let _done = false;
 
-    assert!(true);
+    let todo_id: i64 = sqlx::query!(
+        "INSERT INTO todos (title, description, done) VALUES ($1, $2, $3) RETURNING id",
+        _title,
+        _description,
+        _done
+    )
+    .fetch_one(&_pool)
+    .await
+    .unwrap()
+    .id;
+
+    assert!(todo_id > 0);
 }
 
 ///
@@ -141,6 +170,8 @@ async fn insert_todo() {
 ///
 #[tokio::test]
 async fn update_todo() {
+    dotenv::dotenv().ok();
+
     let _pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
@@ -149,6 +180,11 @@ async fn update_todo() {
 
     let _id = 1;
     let _done = true;
+
+    let _result = sqlx::query!("UPDATE todos SET done = $1 WHERE id = $2", _done, _id)
+        .execute(&_pool)
+        .await
+        .unwrap();
 
     assert!(true);
 }
@@ -163,6 +199,8 @@ async fn update_todo() {
 ///
 #[tokio::test]
 async fn delete_todo() {
+    dotenv::dotenv().ok();
+
     let _pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
@@ -170,6 +208,11 @@ async fn delete_todo() {
         .unwrap();
 
     let _id = 1;
+
+    let _result = sqlx::query!("DELETE FROM todos WHERE id = $1", _id)
+        .execute(&_pool)
+        .await
+        .unwrap();
 
     assert!(true);
 }
