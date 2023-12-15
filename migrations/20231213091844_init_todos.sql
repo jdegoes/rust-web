@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS todos
+(
+    id          BIGSERIAL PRIMARY KEY,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL,
+    done        BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
