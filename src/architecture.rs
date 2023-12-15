@@ -17,49 +17,75 @@
 //!
 //!
 
-use chrono::{DateTime, Utc};
+use async_openai::{config::OpenAIConfig, types::CreateCompletionRequestArgs};
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-
-//
-// EXERCISE 1
-// ----------
-//
-// You are creating a todo app. Furthermore, you want to utilize best
-// practice architecture and design patterns that may cost more in
-// the short term, but will increase the quality of your solution and
-// lower costs of maintenance.
-//
-// Naturally, you will be using the Rust programming language for this
-// project. You have decided to use Axum as your web framework, and
-// Postgres as the database, with SQLx as the database library.
-//
-// Your first step is to design the data structures that will be used
-// for modeling different entities in the domain of a todo application.
-//
-// Use best-practice data modeling techniques to design these data
-// structures, deriving implementations for traits like `Clone`,
-// `Debug`, `PartialEq`, `Serialize`, and `Deserialize`.
-//
+use sqlx::{Pool, Postgres};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct Todo {
-    id: u64,
+struct CreateTodo {
+    title: String,
+    description: String,
+    priority: Priority,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
+    // subtasks: Vec<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct UpdateTodo {
     title: String,
     description: String,
     status: Status,
     priority: Priority,
-    created_at: DateTime<Utc>,
-    deadline: Option<DateTime<Utc>>,
-    tags: Vec<String>,
-    subtasks: Vec<u64>,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Todo {
+    id: TodoId,
+    title: String,
+    description: String,
+    status: Status,
+    priority: Priority,
+    created_at: NaiveDateTime,
+    deadline: Option<NaiveDateTime>,
+    tags: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct TodoId(i64);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 enum Status {
     Todo,
     InProgress,
-    Complete,
+    Done,
     Aborted,
+}
+
+impl From<i16> for Status {
+    fn from(i: i16) -> Self {
+        match i {
+            0 => Self::Todo,
+            1 => Self::InProgress,
+            2 => Self::Done,
+            -1 => Self::Aborted,
+            _ => panic!("Invalid status value"),
+        }
+    }
+}
+
+impl Into<i16> for Status {
+    fn into(self) -> i16 {
+        match self {
+            Self::Todo => 0,
+            Self::InProgress => 1,
+            Self::Done => 2,
+            Self::Aborted => -1,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -69,84 +95,294 @@ enum Priority {
     High,
 }
 
-//
-// EXERCISE 2
-// ----------
-//
-// Now that you have designed data structures for the todo app, it's
-// natural to think about how you might persist them to a database.
-//
-// Construct a relational data model for your data structures that
-// follows best practices for relational data modeling, including
-// normalization and foreign keys.
-//
-// Then write SQLx migration scripts to create the relational data
-// model in Postgres. Finally, use the sqlx CLI to run the migration
-// on your Postgres database so you are ready to proceed to the next
-// step.
-//
+impl From<i16> for Priority {
+    fn from(i: i16) -> Self {
+        match i {
+            0 => Self::Low,
+            1 => Self::Medium,
+            2 => Self::High,
+            _ => panic!("Invalid priority value"),
+        }
+    }
+}
 
-// DONE with migration
-// $> sqlx migrate add todo_app
-// $> sqlx migrate run
+impl From<String> for Priority {
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "Low" => Self::Low,
+            "Medium" => Self::Medium,
+            "High" => Self::High,
+            t => panic!("Invalid priority value: {}", t),
+        }
+    }
+}
 
-//
-// EXERCISE 3
-// ----------
-//
-// When working on application architecture, your top priorities are
-// as follows:
-//
-// 1. Modularity. You want to be able to break down the application
-//   into distinct pieces, each of is devoted to specific and highly
-//   scoped functionality. No part of the application should need to
-//   know about the internals of any other part of the application.
-//   Each part should be independently replaceable.
-//
-// 2. Testability. You want to be able to test all of your application
-//   logic in isolation, without having to cover everything with
-//   integration or system tests. This means that your application logic
-//   must be independent of real web servers, real database, and real
-//   APIs, which implies that you have facades that abstract over
-//   the core pieces of functionality required by your logic.
-//
-// In the exercises in this workshop so far, we have been directly
-// talking to databases inside handlers. Moreover, our handlers have
-// been thoroughly entangled with the data types of Axum. This close
-// coupling to database and web server does not meet the modularity
-// and testability requirements of a well-designed application.
-//
-// Do a thought experiment for the todo app you are developing:
-//
-// 1. What, if anything, does your application logic require from Axum?
-//
-// 2. What, if anything, does your application logic require from SQLx?
-//
-// Now try to scope these requirements to the smallest possible surface
-// area. For example, obviously a todo app requires persistence, but it
-// does not require the full power of SQL: in fact, only a few different
-// SQL queries will be necessary to implement the entire application.
-//
-// In Rust, traits are essential tools of abstraction. Beyond traits, you
-// have your choice of polymorphism or dynamic dispatch (Box<dyn Trait>).
-//
-// Design a set of traits that abstract over the functionality required
-// by your application logic. Can you think of any patterns from other
-// programming languages that might be useful here?
-//
+impl Into<i16> for Priority {
+    fn into(self) -> i16 {
+        match self {
+            Self::Low => 0,
+            Self::Medium => 1,
+            Self::High => 2,
+        }
+    }
+}
 
-//
-// EXERCISE 4
-// ----------
-//
-// Now that you have designed a set of traits that abstract over the
-// functionality required by your application logic, you can implement
-// these traits for data types that are bound to Axum and SQLx.
-//
-// The implementations will be "live" implementations that directly
-// talk to Axum and SQLx, but they will be hidden behind the traits
-// you designed in the previous exercise.
-//
+#[async_trait::async_trait]
+trait TodoRepo {
+    async fn create(&self, create_todo: CreateTodo) -> Todo;
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
+    async fn delete_by_id(&self, id: TodoId) -> bool;
+    async fn get_all(&self) -> Vec<Todo>;
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo>;
+}
+
+#[async_trait::async_trait]
+trait TodoAI {
+    async fn infer_title(&self, text: String) -> Option<String>;
+    async fn infer_deadline(&self, todo: &Todo) -> Option<NaiveDateTime>;
+    async fn infer_priority(&self, todo: &Todo) -> Option<Priority>;
+    async fn split_into_todos(&self, prompt: String) -> Vec<Todo>;
+    async fn classify(&self, todo: &Todo) -> Vec<String>;
+}
+
+#[async_trait::async_trait]
+trait TodoService {
+    async fn create_many(&self, prompt: String) -> Vec<Todo>;
+    async fn create(&self, description: String) -> Todo;
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
+    async fn delete_by_id(&self, id: TodoId) -> bool;
+    async fn get_all(&self) -> Vec<Todo>;
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo>;
+}
+
+struct TodoRepoSqlImpl {
+    pool: Pool<Postgres>,
+}
+
+impl TodoRepoSqlImpl {
+    pub fn new(pool: Pool<Postgres>) -> Self {
+        Self { pool }
+    }
+}
+
+#[async_trait::async_trait]
+impl TodoRepo for TodoRepoSqlImpl {
+    async fn create(&self, create_todo: CreateTodo) -> Todo {
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO todos (title, description, priority, deadline, tags)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, title, description, created_at, status, priority, deadline, tags
+            "#,
+            create_todo.title,
+            create_todo.description,
+            create_todo.priority as i16,
+            create_todo.deadline,
+            create_todo.tags,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .unwrap();
+
+        Todo {
+            id: TodoId(result.id),
+            title: result.title,
+            description: result.description.unwrap_or("".to_string()),
+            status: Status::from(result.status),
+            created_at: result.created_at,
+            deadline: result.deadline,
+            tags: result.tags,
+            priority: Priority::from(result.priority),
+        }
+    }
+
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo> {
+        let result = sqlx::query!(
+            r#"
+            SELECT id, title, description, created_at, status, priority, deadline, tags
+            FROM todos
+            WHERE id = $1
+            "#,
+            id.0
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ok()?;
+
+        Some(Todo {
+            id: TodoId(result.id),
+            title: result.title,
+            description: result.description.unwrap_or("".to_string()),
+            status: Status::from(result.status),
+            created_at: result.created_at,
+            deadline: result.deadline,
+            tags: result.tags,
+            priority: Priority::from(result.priority),
+        })
+    }
+
+    async fn delete_by_id(&self, id: TodoId) -> bool {
+        let result = sqlx::query!("DELETE FROM todos WHERE id = $1", id.0)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+
+        result.rows_affected() > 0
+    }
+
+    async fn get_all(&self) -> Vec<Todo> {
+        let result = sqlx::query!(
+            r#"
+            SELECT id, title, description, created_at, status, priority, deadline, tags
+            FROM todos
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .unwrap();
+
+        result
+            .into_iter()
+            .map(|row| Todo {
+                id: TodoId(row.id),
+                title: row.title,
+                description: row.description.unwrap_or("".to_string()),
+                status: Status::from(row.status),
+                created_at: row.created_at,
+                deadline: row.deadline,
+                tags: row.tags,
+                priority: Priority::from(row.priority),
+            })
+            .collect()
+    }
+
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE todos
+            SET title = $2, description = $3, status = $4, priority = $5, deadline = $6, tags = $7
+            WHERE id = $1
+            RETURNING id, title, description, created_at, status, priority, deadline, tags
+            "#,
+            id.0,
+            update_todo.title,
+            update_todo.description,
+            update_todo.status as i16,
+            update_todo.priority as i16,
+            update_todo.deadline,
+            update_todo.tags,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .ok()?;
+
+        Some(Todo {
+            id: TodoId(result.id),
+            title: result.title,
+            description: result.description.unwrap_or("".to_string()),
+            status: Status::from(result.status),
+            created_at: result.created_at,
+            deadline: result.deadline,
+            tags: result.tags,
+            priority: Priority::from(result.priority),
+        })
+    }
+}
+
+struct TodoOpenAIImpl {
+    // https://github.com/64bit/async-openai/tree/main/examples/assistants
+    client: async_openai::Client<OpenAIConfig>,
+}
+
+impl TodoOpenAIImpl {
+    pub fn new(client: async_openai::Client<OpenAIConfig>) -> Self {
+        Self { client }
+    }
+
+    async fn send_prompt(
+        client: &async_openai::Client<OpenAIConfig>,
+        prompt: String,
+    ) -> Option<String> {
+        let request = CreateCompletionRequestArgs::default()
+            .model("gpt-3.5")
+            .prompt(prompt)
+            .max_tokens(40_u16)
+            .build()
+            .unwrap();
+
+        let response = client.completions().create(request).await.unwrap();
+
+        response
+            .choices
+            .first()
+            .map(|first| return first.text.clone())
+    }
+}
+
+#[async_trait::async_trait]
+impl TodoAI for TodoOpenAIImpl {
+    async fn infer_title(&self, text: String) -> Option<String> {
+        let prompt = format!(
+            r#"
+        You are a part of an Todo application. You are given a description of a task and you need to infer the title of the task.
+
+        Description: "{}"
+
+        Only respond with the title and nothing else.
+        "#,
+            text
+        );
+
+        TodoOpenAIImpl::send_prompt(&self.client, prompt).await
+    }
+
+    async fn infer_deadline(&self, todo: &Todo) -> Option<NaiveDateTime> {
+        let prompt = format!(
+            r#"
+        You are a part of an Todo application. You are given a description of a task and you need to infer the deadline of the task.
+        Here is today's date: {}
+        Here is the description: "{}"
+        Respond with a date in the format: YYYY-MM-DD
+        "#,
+            chrono::Local::now().naive_local().date(),
+            todo.description
+        );
+
+        TodoOpenAIImpl::send_prompt(&self.client, prompt)
+            .await
+            .map(|s| {
+                NaiveDateTime::parse_from_str(&s, "%Y-%m-%d")
+                    .unwrap()
+                    .date()
+                    .and_hms_opt(0, 0, 0)
+            })
+            .flatten()
+    }
+
+    async fn infer_priority(&self, todo: &Todo) -> Option<Priority> {
+        let prompt = format!(
+            r#"
+        You are a part of an Todo application. You are given a description of a task and you need to infer the priority of the task.
+        The options are: Low, Medium, High
+        Only respond with the priority and nothing else.
+        Here is the description: "{}"
+        "#,
+            todo.description
+        );
+
+        TodoOpenAIImpl::send_prompt(&self.client, prompt)
+            .await
+            .map(|s| Priority::from(s))
+    }
+
+    async fn split_into_todos(&self, _prompt: String) -> Vec<Todo> {
+        vec![]
+    }
+
+    async fn classify(&self, _todo: &Todo) -> Vec<String> {
+        vec![]
+    }
+}
 
 //
 // EXERCISE 5

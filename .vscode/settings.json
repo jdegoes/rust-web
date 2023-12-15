@@ -4,6 +4,8 @@
         "oneshot",
         "prometheus",
         "reqwest",
+        "sqlx",
+        "todos",
         "tokio"
     ],
     "files.exclude": {
