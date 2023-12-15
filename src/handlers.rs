@@ -117,37 +117,6 @@ async fn string_handler(string: String) -> String {
     string
 }
 
-#[tokio::test]
-async fn string_query_param_handler_test() {
-    // for Body::collect
-    use http_body_util::BodyExt;
-    /// for ServiceExt::oneshot
-    use tower::util::ServiceExt;
-
-    let app = Router::<()>::new().route("/users", get(request_to_string_handler));
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(Method::GET)
-                .uri("/users?test=abc")
-                .body(Body::from("<h1>Hello!</h1>"))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-
-    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
-
-    assert_eq!(body_as_string, "abc");
-}
-
-async fn request_to_string_handler(_request: Request<Body>) -> String {
-    todo!("Return the query parameter `test` as a string")
-}
-
 ///
 /// EXERCISE 3
 ///
