@@ -136,23 +136,23 @@ async fn select_star() {
 async fn insert_todo() {
     dotenv::dotenv().ok();
 
-    let _pool = PgPoolOptions::new()
+    let pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
         .await
         .unwrap();
 
-    let _title = "Learn SQLx";
-    let _description = "I should really learn SQLx for my Axum web app";
-    let _done = false;
+    let title = "Learn SQLx";
+    let description = "I should really learn SQLx for my Axum web app";
+    let done = false;
 
     let todo_id: i64 = sqlx::query!(
         "INSERT INTO todos (title, description, done) VALUES ($1, $2, $3) RETURNING id",
-        _title,
-        _description,
-        _done
+        title,
+        description,
+        done
     )
-    .fetch_one(&_pool)
+    .fetch_one(&pool)
     .await
     .unwrap()
     .id;
