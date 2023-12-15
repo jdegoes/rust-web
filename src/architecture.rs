@@ -16,10 +16,13 @@
 //! in other languages that have long been used for building web apps.
 //!
 
+use std::{pin::Pin, sync::Arc};
+
 use async_openai::{config::OpenAIConfig, types::CreateCompletionRequestArgs};
+use axum::{extract::State, routing::*, Json, Router};
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres};
+use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
 
 //
 // EXERCISE 1
@@ -187,7 +190,7 @@ impl Into<i16> for Status {
 // programming languages that might be useful here?
 //
 #[async_trait::async_trait]
-trait TodoRepo {
+trait TodoRepo: Send + Sync + Clone {
     async fn create(&self, create_todo: CreateTodo) -> Todo;
 
     async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
@@ -200,7 +203,7 @@ trait TodoRepo {
 }
 
 #[async_trait::async_trait]
-trait TodoService {
+trait TodoService: Send + Sync + Clone {
     // async fn create_many(&self, text: String) -> Vec<Todo>;
 
     async fn create(&self, description: String) -> Todo;
@@ -215,7 +218,7 @@ trait TodoService {
 }
 
 #[async_trait::async_trait]
-trait TodoAI {
+trait TodoAI: Send + Sync + Clone {
     async fn infer_title(&self, description: &String) -> Option<String>;
 
     async fn infer_deadline(&self, description: &String) -> Option<NaiveDateTime>;
@@ -237,6 +240,7 @@ trait TodoAI {
 // talk to Axum and SQLx, but they will be hidden behind the traits
 // you designed in the previous exercise.
 //
+#[derive(Clone)]
 pub struct PostgresTodoRepo {
     pool: Pool<Postgres>,
 }
@@ -356,6 +360,7 @@ impl TodoRepo for PostgresTodoRepo {
     }
 }
 
+#[derive(Clone)]
 pub struct OpenAITodoAI {
     client: async_openai::Client<OpenAIConfig>,
 }
@@ -364,23 +369,7 @@ impl OpenAITodoAI {
         Self { client }
     }
 }
-/*
-// Create request using builder pattern
- // Every request struct has companion builder struct with same name + Args suffix
- let request = CreateCompletionRequestArgs::default()
-     .model("text-davinci-003")
-     .prompt("Tell me the recipe of alfredo pasta")
-     .max_tokens(40_u16)
-     .build()
-     .unwrap();
 
- // Call API
- let response = client
-     .completions()      // Get the API "group" (completions, images, etc.) from the client
-     .create(request)    // Make the API call in that "group"
-     .await
-     .unwrap();
- */
 #[async_trait::async_trait]
 impl TodoAI for OpenAITodoAI {
     async fn infer_title(&self, description: &String) -> Option<String> {
@@ -394,14 +383,13 @@ impl TodoAI for OpenAITodoAI {
             .max_tokens(40_u16)
             .build()
             .unwrap();
-   
-        let response = self.client
-            .completions()
-            .create(request)
-            .await
-            .unwrap();
 
-        response.choices.first().map(|first| { return first.text.clone() })
+        let response = self.client.completions().create(request).await.unwrap();
+
+        response
+            .choices
+            .first()
+            .map(|first| return first.text.clone())
     }
 
     async fn infer_deadline(&self, description: &String) -> Option<NaiveDateTime> {
@@ -420,14 +408,13 @@ impl TodoAI for OpenAITodoAI {
             .max_tokens(40_u16)
             .build()
             .unwrap();
-   
-        let response = self.client
-            .completions()
-            .create(request)
-            .await
-            .unwrap();
 
-        response.choices.first().map(|first| { return first.text.clone().parse::<i16>().unwrap().into() })
+        let response = self.client.completions().create(request).await.unwrap();
+
+        response
+            .choices
+            .first()
+            .map(|first| return first.text.clone().parse::<i16>().unwrap().into())
     }
 
     async fn infer_tags(&self, description: &String) -> Option<String> {
@@ -442,14 +429,59 @@ impl TodoAI for OpenAITodoAI {
             .max_tokens(40_u16)
             .build()
             .unwrap();
-   
-        let response = self.client
-            .completions()
-            .create(request)
-            .await
-            .unwrap();
 
-        response.choices.first().map(|first| { return first.text.clone() })
+        let response = self.client.completions().create(request).await.unwrap();
+
+        response
+            .choices
+            .first()
+            .map(|first| return first.text.clone())
+    }
+}
+
+#[derive(Clone)]
+struct LiveTodoService<S1: TodoRepo, S2: TodoAI> {
+    todo_repo: S1,
+    todo_ai: S2,
+}
+impl<S1: TodoRepo, S2: TodoAI> LiveTodoService<S1, S2> {
+    pub fn new(todo_repo: S1, todo_ai: S2) -> Self {
+        Self { todo_repo, todo_ai }
+    }
+}
+#[async_trait::async_trait]
+impl<S1: TodoRepo, S2: TodoAI> TodoService for LiveTodoService<S1, S2> {
+    async fn create(&self, description: String) -> Todo {
+        let title = self.todo_ai.infer_title(&description).await.unwrap();
+        let deadline = self.todo_ai.infer_deadline(&description).await;
+        let priority = self.todo_ai.infer_priority(&description).await.unwrap();
+        let tags = self.todo_ai.infer_tags(&description).await.unwrap();
+
+        let create_todo = CreateTodo {
+            title,
+            description,
+            deadline,
+            tags,
+            priority,
+        };
+
+        self.todo_repo.create(create_todo).await
+    }
+
+    async fn get_by_id(&self, id: TodoId) -> Option<Todo> {
+        self.todo_repo.get_by_id(id).await
+    }
+
+    async fn delete_by_id(&self, id: TodoId) -> bool {
+        self.todo_repo.delete_by_id(id).await
+    }
+
+    async fn get_all(&self) -> Vec<Todo> {
+        self.todo_repo.get_all().await
+    }
+
+    async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo> {
+        self.todo_repo.update(id, update_todo).await
     }
 }
 
@@ -468,6 +500,109 @@ impl TodoAI for OpenAITodoAI {
 // be sure to introduce tests, which might necessitate you providing
 // alternate implementations of the traits you designed previously.
 //
+pub async fn start_todo_web_app() {
+    let pool = PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&std::env::var("DATABASE_URL").unwrap())
+        .await
+        .unwrap();
+
+    let todo_repo = PostgresTodoRepo::new(pool);
+
+    let client = async_openai::Client::new();
+
+    let todo_ai = OpenAITodoAI::new(client);
+
+    let todo_service = LiveTodoService::new(todo_repo, todo_ai);
+
+    type State = LiveTodoService<PostgresTodoRepo, OpenAITodoAI>;
+
+    // build our application with a route
+    let app = Router::new()
+        .route("/todos/", post(create_todo::<State>))
+        .route("/todos/:id", get(get_by_id::<State>))
+        .route("/todos/:id", delete(delete_by_id::<State>))
+        .route("/todos/", get(get_all::<State>))
+        .route("/todos/:id", put(update::<State>))
+        .route("/todos/", get(get_todos::<State>))
+        .with_state(todo_service);
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+async fn create_todo<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(CreateTodoRequest { description }): Json<CreateTodoRequest>,
+) -> Json<Todo> {
+    let todo = todo_service.create(description).await;
+
+    Json(todo)
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct CreateTodoRequest {
+    description: String,
+}
+async fn get_by_id<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(GetByIdRequest { id }): Json<GetByIdRequest>,
+) -> Json<Option<Todo>> {
+    let todo = todo_service.get_by_id(id).await;
+
+    Json(todo)
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct GetByIdRequest {
+    id: TodoId,
+}
+async fn delete_by_id<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(DeleteByIdRequest { id }): Json<DeleteByIdRequest>,
+) -> Json<bool> {
+    let result = todo_service.delete_by_id(id).await;
+
+    Json(result)
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct DeleteByIdRequest {
+    id: TodoId,
+}
+async fn get_all<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(GetTodosRequest): Json<GetTodosRequest>,
+) -> Json<Vec<Todo>> {
+    let todos = todo_service.get_all().await;
+
+    Json(todos)
+}
+async fn update<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(UpdateTodoRequest { id, update_todo }): Json<UpdateTodoRequest>,
+) -> Json<Option<Todo>> {
+    let todo = todo_service.update(id, update_todo).await;
+
+    Json(todo)
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct UpdateTodoRequest {
+    id: TodoId,
+    update_todo: UpdateTodo,
+}
+async fn get_todos<S: TodoService>(
+    State(todo_service): State<S>,
+    Json(GetTodosRequest): Json<GetTodosRequest>,
+) -> Json<Vec<Todo>> {
+    let todos = todo_service.get_all().await;
+
+    Json(todos)
+}
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+struct GetTodosRequest;
 
 //
 // EXERCISE 6

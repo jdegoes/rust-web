@@ -14,7 +14,9 @@ async fn main() {
 
     // basics::hello_world().await;
 
-    client::cat_fact_server().await;
+    // client::cat_fact_server().await;
+
+    architecture::start_todo_web_app().await;
 
     println!("Hello, world!");
 }
