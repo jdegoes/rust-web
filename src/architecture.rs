@@ -275,19 +275,83 @@ impl TodoRepo for PostgresTodoRepo {
     }
 
     async fn get_by_id(&self, id: TodoId) -> Option<Todo> {
-        todo!()
+        let optional = sqlx::query!(
+            "SELECT id, title, description, status, created_at, deadline, tags, priority FROM todos WHERE id = $1",
+            id.0,
+        ).fetch_optional(&self.pool).await.unwrap();
+
+        match optional {
+            Some(result) => Some(Todo {
+                id: TodoId(result.id),
+                title: result.title,
+                description: result.description.unwrap_or("".to_string()),
+                status: Status::from(result.status),
+                created_at: result.created_at,
+                deadline: result.deadline,
+                tags: result.tags,
+                priority: Priority::from(result.priority),
+            }),
+            None => None,
+        }
     }
 
     async fn delete_by_id(&self, id: TodoId) -> bool {
-        todo!()
+        let result = sqlx::query!("DELETE FROM todos WHERE id = $1", id.0,)
+            .execute(&self.pool)
+            .await
+            .unwrap();
+
+        result.rows_affected() > 0
     }
 
     async fn get_all(&self) -> Vec<Todo> {
-        todo!()
+        let results = sqlx::query!(
+            "SELECT id, title, description, status, created_at, deadline, tags, priority FROM todos",
+        ).fetch_all(&self.pool).await.unwrap();
+
+        results
+            .into_iter()
+            .map(|result| Todo {
+                id: TodoId(result.id),
+                title: result.title,
+                description: result.description.unwrap_or("".to_string()),
+                status: Status::from(result.status),
+                created_at: result.created_at,
+                deadline: result.deadline,
+                tags: result.tags,
+                priority: Priority::from(result.priority),
+            })
+            .collect()
     }
 
     async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo> {
-        todo!()
+        let priority: i16 = update_todo.priority.into();
+        let status: i16 = update_todo.status.into();
+
+        let result = sqlx::query!(
+            "UPDATE todos SET title = $1, description = $2, status = $3, deadline = $4, tags = $5, priority = $6 WHERE id = $7 RETURNING id, title, description, status, created_at, deadline, tags, priority",
+            update_todo.title,
+            update_todo.description,
+            status,
+            update_todo.deadline,
+            update_todo.tags,
+            priority,
+            id.0,
+        ).fetch_optional(&self.pool).await.unwrap();
+
+        match result {
+            Some(result) => Some(Todo {
+                id: TodoId(result.id),
+                title: result.title,
+                description: result.description.unwrap_or("".to_string()),
+                status: Status::from(result.status),
+                created_at: result.created_at,
+                deadline: result.deadline,
+                tags: result.tags,
+                priority: Priority::from(result.priority),
+            }),
+            None => None,
+        }
     }
 }
 
