@@ -19,9 +19,12 @@
 //! and interact with paths in a route definition.
 //!
 
+use axum::response::IntoResponse;
+use axum::response::Response;
 #[allow(unused_imports)]
-use axum::{body::Body, http::Method, routing::*};
-use hyper::Request;
+use axum::{body::Body, extract::*, http::Method, routing::*, Json};
+use hyper::{Request, StatusCode};
+use std::collections::HashMap;
 
 ///
 /// EXERCISE 1
@@ -63,8 +66,17 @@ async fn basic_request_handler_test() {
 
     assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
-async fn basic_request_handler(_request: Request<Body>) -> String {
-    todo!("Return the body, as a string")
+
+async fn basic_request_handler(request: Request<Body>) -> String {
+    use http_body_util::BodyExt;
+    let body = request
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes()
+        .to_vec();
+    String::from_utf8(body).unwrap()
 }
 
 ///
@@ -96,10 +108,11 @@ async fn string_handler_test() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let _body_as_string = String::from_utf8(body.to_vec()).unwrap();
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    todo!("assert_eq");
+    assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
+
 async fn string_handler(string: String) -> String {
     string
 }
@@ -131,10 +144,11 @@ async fn bytes_handler_test() {
         .await
         .unwrap();
 
-    let _body = response.into_body().collect().await.unwrap().to_bytes();
+    let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    todo!("assert_eq");
+    assert_eq!(body, "<h1>Hello!</h1>".as_bytes());
 }
+
 async fn bytes_handler(bytes: hyper::body::Bytes) -> hyper::body::Bytes {
     bytes
 }
@@ -174,8 +188,14 @@ async fn json_handler_test() {
 
     assert_eq!(body_as_string, "John Doe");
 }
-async fn json_handler() -> String {
-    todo!("Return the name of the person")
+
+async fn json_handler(Json(Person { name }): Json<Person>) -> String {
+    name
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Person {
+    name: String,
 }
 
 ///
@@ -197,13 +217,13 @@ async fn path_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users/jdoe", get(path_handler));
+    let app = Router::<()>::new().route("/users/:name/:age", get(path_handler));
 
     let response = app
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/users/jdoe")
+                .uri("/users/jdoe/45")
                 .body(Body::from(""))
                 .unwrap(),
         )
@@ -214,10 +234,13 @@ async fn path_handler_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, "jdoe");
+    assert_eq!(body_as_string, "jdoe45");
 }
-async fn path_handler(axum::extract::Path(_name): axum::extract::Path<String>) -> String {
-    todo!("Return the name of the person")
+
+async fn path_handler(
+    axum::extract::Path((name, age)): axum::extract::Path<(String, u8)>,
+) -> String {
+    name + &age.to_string()
 }
 
 ///
@@ -259,13 +282,11 @@ async fn path2_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:1");
 }
+
 async fn path2_handler(
-    axum::extract::Path(mut name): axum::extract::Path<String>,
-    axum::extract::Path(post_id): axum::extract::Path<u32>,
+    axum::extract::Path((name, post_id)): axum::extract::Path<(String, u32)>,
 ) -> String {
-    name.push_str(":");
-    name.push_str(&post_id.to_string());
-    name
+    format!("{}:{}", name, post_id)
 }
 
 ///
@@ -288,7 +309,7 @@ async fn query_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users", get(query_handler));
+    let app = Router::<()>::new().route("/users", get(query_handler2));
 
     let response = app
         .oneshot(
@@ -307,8 +328,27 @@ async fn query_handler_test() {
 
     assert_eq!(body_as_string, "name=jdoe&age=42");
 }
-async fn query_handler() -> String {
-    todo!("Return the query parameters formatted into a query string")
+
+async fn query_handler(
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> String {
+    format!("name={}&age={}", query["name"], query["age"])
+}
+
+async fn query_handler2(
+    axum::extract::Query(QueryParams {
+        name,
+        age, /* , limit*/
+    }): axum::extract::Query<QueryParams>,
+) -> String {
+    format!("name={}&age={}", name, age.unwrap_or(12))
+}
+
+#[derive(serde::Deserialize)]
+struct QueryParams {
+    name: String,
+    age: Option<u8>,
+    // limit: Option<u8>,
 }
 
 ///
@@ -346,8 +386,13 @@ async fn header_handler_test() {
 
     assert_eq!(body_as_string, "application/json");
 }
-async fn header_handler(_headers: axum::http::HeaderMap) -> String {
-    todo!("Return the Content-Type header")
+async fn header_handler(headers: axum::http::HeaderMap) -> String {
+    headers
+        .get("Content-Type")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 ///
@@ -385,8 +430,12 @@ async fn multiple_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:10");
 }
-async fn multiple_handler() -> String {
-    todo!("Return the limit query parameter and the name path segment variable, joined together by the character `:`")
+
+async fn multiple_handler(
+    Query(map): Query<HashMap<String, String>>,
+    Path(name): Path<String>,
+) -> String {
+    format!("{}:{}", name, map["limit"])
 }
 
 ///
@@ -430,11 +479,16 @@ async fn response_handler_test() {
         "text/plain"
     );
 }
+
 async fn response_handler() -> hyper::Response<Body> {
     #![allow(unused_imports)]
     use hyper::Response;
 
-    todo!("Return a response with a status code of 200 and a content type of `text/plain`")
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "text/plain")
+        .body(Body::from(""))
+        .unwrap()
 }
 
 ///
@@ -472,8 +526,9 @@ async fn body_handler_test() {
 
     assert_eq!(body_as_string, "Hello, world!");
 }
+
 async fn body_handler() -> Body {
-    todo!("Return a body with the static string `Hello, world!`")
+    Body::from("Hello, world!")
 }
 
 ///
@@ -493,7 +548,7 @@ async fn json_response_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/", get(json_response_handler));
+    let app = Router::<()>::new().route("/", get(json_response_handler2));
 
     let response = app
         .oneshot(
@@ -512,8 +567,17 @@ async fn json_response_handler_test() {
 
     assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
 }
-async fn json_response_handler() -> axum::Json<()> {
-    todo!("Return a Json<Person> value with name equal to `John Doe`")
+
+async fn json_response_handler() -> Json<Person> {
+    Json(Person {
+        name: "John Doe".to_string(),
+    })
+}
+
+use serde_json::json;
+use serde_json::Value as JsonValue;
+async fn json_response_handler2() -> Json<JsonValue> {
+    Json(json!({"name": "John Doe" }))
 }
 
 ///
@@ -547,7 +611,7 @@ async fn handler_trait_test() {
         .oneshot(
             Request::builder()
                 .method(Method::GET)
-                .uri("/")
+                .uri("/?username=bob")
                 .body(Body::from(""))
                 .unwrap(),
         )
@@ -558,8 +622,184 @@ async fn handler_trait_test() {
 
     let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
+    assert_eq!(body_as_string, r#"User bob found"#);
 }
-async fn handler_trait_handler() -> () {
-    todo!("Return a custom data type for which you provide an implementation of IntoResponse")
+
+async fn handler_trait_handler(user_details: UserDetails) -> UserDetailsResponse {
+    if user_details.username == "bob" {
+        UserDetailsResponse::Confirmed(user_details.username)
+    } else {
+        UserDetailsResponse::UserNotFound
+    }
 }
+
+struct UserDetails {
+    username: String,
+}
+
+use async_trait::async_trait;
+#[async_trait]
+impl<S> FromRequest<S> for UserDetails {
+    type Rejection = String;
+
+    /// Perform the extraction.
+    async fn from_request(request: Request<Body>, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(UserDetails {
+            username: request
+                .into_parts()
+                .0
+                .uri
+                .query()
+                .unwrap()
+                .split('=')
+                .last()
+                .unwrap()
+                .to_string(),
+        })
+    }
+}
+
+enum UserDetailsResponse {
+    UserNotFound,
+    Confirmed(String),
+}
+
+impl IntoResponse for UserDetailsResponse {
+    fn into_response(self) -> Response {
+        match self {
+            UserDetailsResponse::UserNotFound => Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::from("User not found"))
+                .unwrap(),
+            UserDetailsResponse::Confirmed(username) => Response::builder()
+                .status(StatusCode::OK)
+                .body(Body::from(format!("User {} found", username)))
+                .unwrap(),
+        }
+    }
+}
+
+/* BROKEN
+///
+/// EXERCISE 13
+///
+/// Your handlers may return a Result<T, E>, where T is any type that implements
+/// `IntoResponse`, and E is any type that implements `IntoResponse`. This allows
+/// you to return an error response if something goes wrong.
+///
+/// Note that the `IntoResponse` for `E` must take care to return a response with
+/// an appropriate (failing) status code.
+///
+/// In this exercise, change the handler to return a `Result<String, ()>`.
+/// Ensure the handler fails and inspect the response. Then, change the handler
+/// to return a `Result<String, StatusCode>` and note the differences.
+///
+#[tokio::test]
+async fn result_handler_test() {
+    /// for StatusCode
+    use axum::http::StatusCode;
+    /// for ServiceExt::oneshot
+    use tower::util::ServiceExt;
+
+    let app = Router::<()>::new().route("/", get(result_handler));
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri("/")
+                .body(Body::from(""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+async fn result_handler() -> () {
+    todo!("Return a Result<String, ()> to start")
+}
+
+///
+/// GRADUATION PROJECT
+///
+/// Provide a complete implementation of the following API, which uses dummy data.
+///
+/// GET /users
+/// GET /users/:id
+/// POST /users
+/// PUT /users/:id
+/// DELETE /users/:id
+///
+/// Place it into a web server and test to ensure it meets your requirements.
+///
+pub async fn run_users_server() {
+    let handlers = Handlers{
+        in_memory_data: HashMap::new(),
+    }
+    let user_routes: Router = Router::new()
+        .route("/", get(handlers.get_users()))
+        .route("/:id", get(handlers.get_user()))
+        .route("/", post(handlers.create_user()))
+        .route("/:id", put(handlers.update_user()))
+        .route("/:id", delete(handlers.delete_user()));
+
+    let app = Router::new().nest("/users", user_routes);
+
+    // run it
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct User {
+    id: u8,
+    name: String,
+    age: u8,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+enum UserResponses {
+    UserNotFound,
+    UserCreated(User),
+    UserFound(User),
+}
+
+struct Handlers {
+    in_memory_data: HashMap<u8, User>,
+}
+
+impl Handlers {
+    pub async fn get_users() -> Json<Vec<User>> {
+        in_memory_data
+    }
+
+    pub async fn get_user(self) -> dyn Fn( Path<u8>) -> Json<UserResponses> { | Path(id)|
+        match self.in_memory_data.get(id) {
+            Some(user) => Json(UserResponses::UserFound(user)),
+            None => Json(UserResponses::UserNotFound),
+        }
+    }
+
+    pub async fn create_user(self) -> dyn Fn(Json<User>) -> Json<UserResponses> { |Json(user)|
+        self.in_memory_data.insert(user.id, user);
+        Json(UserResponses::UserCreated(user))
+    }
+
+    pub async fn update_user(self) -> dyn Fn(Path<u8>, Json<User>) -> Json<UserResponses> { |Path(id), Json(user)|
+        self. in_memory_data.insert(id, user);
+        Json(UserResponses::UserCreated(user))
+    }
+
+    pub async fn delete_user(self) -> dyn Fn( Path<u8>) -> Json<UserResponses> { |Path(id)|
+        self. in_memory_data.remove(id);
+        Json(UserResponses::UserNotFound)
+    }
+}
+
+ */
