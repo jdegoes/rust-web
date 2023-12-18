@@ -1,10 +1,12 @@
 {
     "cSpell.words": [
         "axum",
+        "dotenv",
         "oneshot",
         "prometheus",
         "reqwest",
         "sqlx",
+        "todoai",
         "todos",
         "tokio"
     ],

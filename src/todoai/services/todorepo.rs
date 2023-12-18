@@ -4,7 +4,7 @@ use crate::todoai::models::todo::{CreateTodo, Todo, TodoId, UpdateTodo};
 use sqlx::{Pool, Postgres};
 
 #[async_trait::async_trait]
-trait TodoRepo {
+pub trait TodoRepo: Send + Sync + Clone {
     async fn create(&self, create_todo: CreateTodo) -> Todo;
     async fn get_by_id(&self, id: TodoId) -> Option<Todo>;
     async fn delete_by_id(&self, id: TodoId) -> bool;
@@ -12,18 +12,19 @@ trait TodoRepo {
     async fn update(&self, id: TodoId, update_todo: UpdateTodo) -> Option<Todo>;
 }
 
-struct TodoRepoSqlImpl {
+#[derive(Clone)]
+pub struct PostgresTodoRepo {
     pool: Pool<Postgres>,
 }
 
-impl TodoRepoSqlImpl {
+impl PostgresTodoRepo {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
 }
 
 #[async_trait::async_trait]
-impl TodoRepo for TodoRepoSqlImpl {
+impl TodoRepo for PostgresTodoRepo {
     async fn create(&self, create_todo: CreateTodo) -> Todo {
         let result = sqlx::query!(
             r#"
