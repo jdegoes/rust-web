@@ -6,6 +6,7 @@ mod handlers;
 mod middleware;
 mod persistence;
 mod playground;
+mod todoai;
 mod welcome;
 
 #[tokio::main]
@@ -17,7 +18,9 @@ async fn main() {
     // context::start_router_mutable_context().await;
     // context::run_users_server().await;
     // client::cat_fact_server().await;
-    client::posts_server().await;
+    // client::posts_server().await;
 
     // println!("Hello, world!");
+
+    todoai::start().await;
 }

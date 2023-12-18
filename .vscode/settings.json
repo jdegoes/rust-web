@@ -17,5 +17,8 @@
         "**/Thumbs.db": true,
         "Cargo.lock": true,
         "target": true
-    }
+    },
+    "rust-analyzer.linkedProjects": [
+        "./Cargo.toml"
+    ]
 }
