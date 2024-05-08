@@ -21,13 +21,14 @@
 
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
+use http_body_util::BodyExt;
 use hyper::Request;
 
 ///
 /// EXERCISE 1
 ///
 /// The most fundamental type your handlers may take is the type `Request<Body>`.
-/// The `Request` type is a struct that contains all of the information about
+/// The `Request` type is a struct that contains all the information about
 /// the incoming request, including the HTTP method, the headers, and the body.
 ///
 /// In this exercise, you will create a handler that takes a `Request<Body>` as
