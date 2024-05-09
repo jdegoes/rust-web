@@ -45,8 +45,12 @@ async fn closure_shared_context() {
     let _gbp_to_usd_rate = 1.3;
 
     let _app = Router::<()>::new()
-        .route("/usd_to_gbp", get(todo!("Make a closure")))
-        .route("/gbp_to_usd", get(todo!("Make a closure")));
+        .route("/usd_to_gbp", get(move |usd: String| {
+            async move { convert_usd_to_gbp(usd, _gbp_to_usd_rate) }
+        }))
+        .route("/gbp_to_usd", get(move |usd: String| async move { 
+            convert_usd_to_gbp(usd, _gbp_to_usd_rate) 
+        }));
 
     let response = _app
         .oneshot(
@@ -71,6 +75,9 @@ fn convert_usd_to_gbp(usd: String, gbp_to_usd_rate: f64) -> String {
 fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
     format!("{}", gbp.parse::<f64>().unwrap() / gbp_to_usd_rate)
 }
+
+#[derive(Clone, Debug, PartialEq)]
+struct Foo{}
 
 ///
 /// EXERCISE 2

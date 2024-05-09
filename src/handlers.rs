@@ -24,7 +24,7 @@ use axum::extract::FromRequestParts;
 use axum::{body::Body, extract::{Path, Query}, http::{Method, request::Parts}, routing::*, Json};
 #[allow(unused_imports)]
 use http_body_util::BodyExt;
-use hyper::Request;
+use hyper::{Request, StatusCode};
 
 ///
 /// EXERCISE 1
@@ -661,8 +661,8 @@ async fn result_handler_test() {
 
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
-async fn result_handler() -> () {
-    todo!("Return a Result<String, ()> to start")
+async fn result_handler() -> Result<String, ()> {
+    Err(())
 }
 
 ///
