@@ -21,6 +21,7 @@
 
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
+#[allow(unused_imports)]
 use http_body_util::BodyExt;
 use hyper::Request;
 
