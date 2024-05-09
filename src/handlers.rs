@@ -20,7 +20,7 @@
 //!
 
 #[allow(unused_imports)]
-use axum::{body::Body, http::Method, routing::*};
+use axum::{body::Body, extract::{Path, Query}, http::Method, routing::*, Json};
 #[allow(unused_imports)]
 use http_body_util::BodyExt;
 use hyper::Request;
@@ -65,8 +65,12 @@ async fn basic_request_handler_test() {
 
     assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
-async fn basic_request_handler(_request: Request<Body>) -> String {
-    todo!("Return the body, as a string")
+async fn basic_request_handler(request: Request<Body>) -> String {
+    let body = request.into_body().collect().await.unwrap().to_bytes().to_vec();
+
+    let body_as_string = String::from_utf8(body).unwrap();
+
+    body_as_string
 }
 
 ///
@@ -98,9 +102,9 @@ async fn string_handler_test() {
 
     let body = response.into_body().collect().await.unwrap().to_bytes();
 
-    let _body_as_string = String::from_utf8(body.to_vec()).unwrap();
+    let body_as_string = String::from_utf8(body.to_vec()).unwrap();
 
-    todo!("assert_eq");
+    assert_eq!(body_as_string, "<h1>Hello!</h1>");
 }
 async fn string_handler(string: String) -> String {
     string
@@ -135,7 +139,11 @@ async fn bytes_handler_test() {
 
     let _body = response.into_body().collect().await.unwrap().to_bytes();
 
-    todo!("assert_eq");
+    let body_as_string = "<h1>Hello!</h1>";
+
+    let body_as_bytes = body_as_string.as_bytes();
+
+    assert_eq!(_body, body_as_bytes);
 }
 async fn bytes_handler(bytes: hyper::body::Bytes) -> hyper::body::Bytes {
     bytes
@@ -176,8 +184,12 @@ async fn json_handler_test() {
 
     assert_eq!(body_as_string, "John Doe");
 }
-async fn json_handler() -> String {
-    todo!("Return the name of the person")
+async fn json_handler(Json(person): Json<Person>) -> String {
+    person.name
+}
+#[derive(serde::Deserialize, serde::Serialize)]
+struct Person {
+    name: String,
 }
 
 ///
@@ -199,7 +211,7 @@ async fn path_handler_test() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let app = Router::<()>::new().route("/users/jdoe", get(path_handler));
+    let app = Router::new().route("/users/:name", get(path_handler));
 
     let response = app
         .oneshot(
@@ -218,8 +230,8 @@ async fn path_handler_test() {
 
     assert_eq!(body_as_string, "jdoe");
 }
-async fn path_handler(axum::extract::Path(_name): axum::extract::Path<String>) -> String {
-    todo!("Return the name of the person")
+async fn path_handler(Path(name2): Path<String>) -> String {
+    name2
 }
 
 ///
@@ -262,12 +274,9 @@ async fn path2_handler_test() {
     assert_eq!(body_as_string, "jdoe:1");
 }
 async fn path2_handler(
-    axum::extract::Path(mut name): axum::extract::Path<String>,
-    axum::extract::Path(post_id): axum::extract::Path<u32>,
+    Path((name, post_id)): Path<(String, u32)>,
 ) -> String {
-    name.push_str(":");
-    name.push_str(&post_id.to_string());
-    name
+    format!("{}:{}", name, post_id)
 }
 
 ///
@@ -309,8 +318,13 @@ async fn query_handler_test() {
 
     assert_eq!(body_as_string, "name=jdoe&age=42");
 }
-async fn query_handler() -> String {
-    todo!("Return the query parameters formatted into a query string")
+async fn query_handler(Query(GetUsersQueryParams { name, age }): Query<GetUsersQueryParams>) -> String {
+    format!("name={}&age={}", name, age)
+}
+#[derive(serde::Deserialize)]
+struct GetUsersQueryParams {
+    name: String,
+    age: u32,
 }
 
 ///
