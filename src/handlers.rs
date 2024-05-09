@@ -19,8 +19,9 @@
 //! and interact with paths in a route definition.
 //!
 
+use axum::extract::FromRequestParts;
 #[allow(unused_imports)]
-use axum::{body::Body, extract::{Path, Query}, http::Method, routing::*, Json};
+use axum::{body::Body, extract::{Path, Query}, http::{Method, request::Parts}, routing::*, Json};
 #[allow(unused_imports)]
 use http_body_util::BodyExt;
 use hyper::Request;
@@ -362,8 +363,13 @@ async fn header_handler_test() {
 
     assert_eq!(body_as_string, "application/json");
 }
-async fn header_handler(_headers: axum::http::HeaderMap) -> String {
-    todo!("Return the Content-Type header")
+async fn header_handler(headers: axum::http::HeaderMap) -> Result<String, String> {
+    let result = 
+        headers.get("Content-Type").ok_or("No Content-Type header")?;
+    
+    let result = result.to_str().map_err(|e| e.to_string())?;
+    
+    Ok(result.into())
 }
 
 ///
@@ -401,8 +407,23 @@ async fn multiple_handler_test() {
 
     assert_eq!(body_as_string, "jdoe:10");
 }
-async fn multiple_handler() -> String {
-    todo!("Return the limit query parameter and the name path segment variable, joined together by the character `:`")
+async fn multiple_handler(
+        Query(QueryLimit { limit }): Query<QueryLimit>, 
+        Path(PathName { name }): Path<PathName>) -> String {
+    // Return the limit query parameter and the name path segment variable, joined together by the character
+
+    format!("{}:{}", name, limit)
+}
+
+#[derive(serde::Deserialize)]
+struct QueryLimit {
+    limit: u32,
+}
+
+#[derive(serde::Deserialize)]
+struct PathName {
+    name: String,
+
 }
 
 ///
@@ -450,7 +471,11 @@ async fn response_handler() -> hyper::Response<Body> {
     #![allow(unused_imports)]
     use hyper::Response;
 
-    todo!("Return a response with a status code of 200 and a content type of `text/plain`")
+    Response::builder()
+        .status(hyper::StatusCode::OK)
+        .header("Content-Type", "text/plain")
+        .body(Body::empty())
+        .unwrap()
 }
 
 ///
@@ -489,7 +514,7 @@ async fn body_handler_test() {
     assert_eq!(body_as_string, "Hello, world!");
 }
 async fn body_handler() -> Body {
-    todo!("Return a body with the static string `Hello, world!`")
+    Body::from("Hello, world!")
 }
 
 ///
@@ -576,9 +601,29 @@ async fn handler_trait_test() {
 
     assert_eq!(body_as_string, r#"{"name":"John Doe"}"#);
 }
-async fn handler_trait_handler() -> () {
-    todo!("Return a custom data type for which you provide an implementation of IntoResponse")
+async fn handler_trait_handler(FullPath(path): FullPath) -> String {
+    path
 }
+
+#[axum::async_trait]
+impl <S> FromRequestParts<S> for FullPath {
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(FullPath(parts.uri.path().to_string()))
+    }
+}
+
+impl axum::response::IntoResponse for Person {
+    fn into_response(self) -> axum::response::Response {
+        axum::response::Response::builder()
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_string(&self).unwrap()))
+            .unwrap()
+    }
+}
+
+struct FullPath(String);
 
 ///
 /// EXERCISE 13
