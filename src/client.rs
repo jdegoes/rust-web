@@ -21,6 +21,7 @@ use axum::{
     routing::*,
     Json, Router,
 };
+use axum::extract::State;
 
 ///
 /// EXERCISE 1
@@ -102,9 +103,10 @@ struct CatFact {
 /// set the body of a request using the `.body` method.`
 ///
 async fn posts_server() {
-    let app = Router::<()>::new();
-
-    let _client = reqwest::Client::new();
+    let app = 
+        Router::new()
+        .route("/posts", get(posts_handler))
+        .with_state(PostsState::new());    
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -113,6 +115,32 @@ async fn posts_server() {
     println!("Listening on {}", listener.local_addr().unwrap());
 
     axum::serve(listener, app).await.unwrap();
+}
+#[derive(Clone)]
+struct PostsState {
+    client: reqwest::Client,
+}
+impl PostsState {
+    fn new() -> Self {
+        Self { client: reqwest::Client::new() }
+    }
+
+}
+
+async fn posts_handler(State(state): State<PostsState>) -> Json<Vec<Post>> {
+    let client = state.client;
+    
+    let response = 
+        client
+            .get("https://jsonplaceholder.typicode.com/posts")
+            .send()
+            .await
+            .unwrap()
+            .json::<Vec<Post>>()
+            .await
+            .unwrap();
+
+    Json(response)
 }
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -33,7 +33,17 @@
 //! 4. Run `sqlx migrate run` to run the migrations in the `migrations` folder.
 //!
 
-use sqlx::{postgres::PgPoolOptions, Postgres};
+use sqlx::{postgres::PgPoolOptions, types::time::PrimitiveDateTime, Pool, Postgres};
+
+use axum::{
+    body::Body,
+    http::{Method, Request},
+    response::Html,
+    routing::*,
+    Json, Router,
+};
+use axum::extract::State;
+use axum::extract::Path;
 
 ///
 /// EXERCISE 1
@@ -72,7 +82,8 @@ async fn select_one_plus_one() {
         .await
         .unwrap();
 
-    let _sum: i32 = todo!("Insert row here");
+    let _sum: i32 = sqlx::query!("SELECT 1 + 1 AS sum")
+        .fetch_one(&_pool).await.unwrap().sum.unwrap();
 
     assert_eq!(_sum, 2);
 }
@@ -96,7 +107,12 @@ async fn select_star() {
         .await
         .unwrap();
 
-    todo!("Insert query here");
+    let todos = sqlx::query!("SELECT * from todos")
+        .fetch_all(&_pool).await.unwrap();
+
+    for todo in todos {
+        println!("{:?}", todo);
+    }
 
     assert!(true);
 }
@@ -127,7 +143,14 @@ async fn insert_todo() {
     let _description = "I should really learn SQLx for my Axum web app";
     let _done = false;
 
-    assert!(true);
+    let _id = sqlx::query!(
+        "INSERT INTO todos (title, description, done) VALUES ($1, $2, $3) RETURNING id",
+        _title,
+        _description,
+        _done
+    ).fetch_one(&_pool).await.unwrap().id;
+
+    assert!(_id > 0);
 }
 
 ///
@@ -139,7 +162,7 @@ async fn insert_todo() {
 /// of the fetch methods.
 ///
 #[tokio::test]
-async fn update_todo() {
+async fn update_todo_test() {
     let _pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
@@ -148,6 +171,9 @@ async fn update_todo() {
 
     let _id = 1;
     let _done = true;
+
+    sqlx::query!("UPDATE todos SET done = $1 WHERE id = $2", _done, _id)
+        .execute(&_pool).await.unwrap();
 
     assert!(true);
 }
@@ -161,7 +187,7 @@ async fn update_todo() {
 /// of the fetch methods.
 ///
 #[tokio::test]
-async fn delete_todo() {
+async fn delete_todo_test() {
     let _pool = PgPoolOptions::new()
         .max_connections(1)
         .connect(&std::env::var("DATABASE_URL").unwrap())
@@ -169,6 +195,9 @@ async fn delete_todo() {
         .unwrap();
 
     let _id = 1;
+
+    sqlx::query!("DELETE FROM todos WHERE id = $1", _id)
+        .execute(&_pool).await.unwrap();
 
     assert!(true);
 }
@@ -194,7 +223,19 @@ async fn select_star_as() {
 
     todo!("Insert query here");
 
+    sqlx::query_as!(TodoPersistence, "SELECT * from todos")
+        .fetch_all(&_pool).await.unwrap();
+
     assert!(true);
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct TodoPersistence {
+    id: i64,
+    title: String,
+    description: String,
+    done: bool,
+    created_at: PrimitiveDateTime,
 }
 
 ///
@@ -204,5 +245,90 @@ async fn select_star_as() {
 /// which uses sqlx for persistence.
 ///
 pub async fn run_todo_app() {
-    todo!("Implement todo app");
+    let state = TodosState::new().await;
+
+    // GET      /todos/     <- get everything
+    // POST     /todos/     <- create a new todo
+    // GET      /todos/:id  <- get a todo
+    // PUT      /todos/:id  <- update a todo
+    // DELETE   /todos/:id  <- delete a todo
+    let app = Router::new()
+        .route("/todos", get(get_all_todos))
+        .route("/todos", post(create_todo))
+        .route("/todos/:id", get(get_todo))
+        .route("/todos/:id", put(update_todo))
+        .route("/todos/:id", delete(delete_todo))
+        .with_state(state);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+#[derive(Clone)]
+struct TodosState {
+    pool: Pool<Postgres>,
+}
+impl TodosState {
+    async fn new() -> Self {
+        let pool = PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+
+        Self { pool }
+    }
+}
+
+async fn get_all_todos(State(state): State<TodosState>) -> Json<Vec<Todo>> {
+    todo!("Implement get_all_todos");
+}
+
+async fn create_todo(State(state): State<TodosState>, Json(create): Json<CreateTodo>) -> Json<CreatedTodo> {
+    todo!("Implement create_todo");
+}
+
+async fn get_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> Json<Todo> {
+    todo!("Implement get_todo");
+}
+
+async fn update_todo(State(state): State<TodosState>, Path(id): Path<i64>, Json(update): Json<UpdateTodo>) -> () {
+    todo!("Implement update_todo");
+}
+
+async fn delete_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> () {
+    todo!("Implement delete_todo");
+}
+
+#[derive(serde::Deserialize, Debug, PartialEq, Clone)]
+struct CreateTodo {
+    title: String,
+    description: String,
+}
+
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
+struct CreatedTodo {
+    id: i64,
+}
+
+#[derive(serde::Deserialize, Debug, PartialEq, Clone)]
+struct UpdateTodo {
+    title: Option<String>,
+    description: Option<String>,
+    done: Option<bool>,
+}
+
+
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone, PartialEq)]
+struct Todo {
+    id: i64,
+    title: String,
+    description: String,
+    done: bool,
+    created_at: String,
 }
