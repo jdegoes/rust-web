@@ -19,12 +19,15 @@
 //! In this section, you will explore these mechanisms.
 //!
 
+use std::sync::Arc;
+
 #[allow(unused_imports)]
 use axum::extract::State;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
+use tokio::sync::Mutex;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct ConversionRate(f64);
@@ -221,13 +224,15 @@ async fn mutable_state_shared_context() {
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
+    
 
-    let _gbp_to_usd_rate = 1.3;
+    let _gbp_to_usd_rate = Arc::new(Mutex::new(1.3));
 
     let _app = Router::new()
         .route("/usd_to_gbp", get(mutable_usd_to_gbp_handler))
         .route("/gbp_to_usd", get(mutable_gbp_to_usd_handler))
-        .with_state(());
+        .route("/set_exchange_rate", post(set_exchange_rate_handler))
+        .with_state(_gbp_to_usd_rate);
 
     let response = _app
         .oneshot(
@@ -246,11 +251,26 @@ async fn mutable_state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn mutable_usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn mutable_usd_to_gbp_handler(State(rate): State<Arc<Mutex<f64>>>, body: String) -> String {
+    let body_as_f64 = body.parse::<f64>().unwrap();
+
+    let guard = rate.lock().await;
+
+    format!("{}", body_as_f64 * (*guard))
 }
-async fn mutable_gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn mutable_gbp_to_usd_handler(State(rate): State<Arc<Mutex<f64>>>, body: String) -> String {
+    let body_as_f64 = body.parse::<f64>().unwrap();
+
+    let guard = rate.lock().await;
+
+    format!("{}", body_as_f64 / (*guard))
+}
+async fn set_exchange_rate_handler(State(rate): State<Arc<Mutex<f64>>>, body: String) -> () {
+    let body_as_f64 = body.parse::<f64>().unwrap();
+
+    let mut guard = rate.lock().await;
+    
+    *guard = body_as_f64;
 }
 
 ///
