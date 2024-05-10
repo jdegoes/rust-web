@@ -293,7 +293,7 @@ async fn create_todo(State(state): State<TodosState>, Json(create): Json<CreateT
     todo!("Implement create_todo");
 }
 
-async fn get_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> Json<Todo> {
+async fn get_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> Json<Option<Todo>> {
     todo!("Implement get_todo");
 }
 
