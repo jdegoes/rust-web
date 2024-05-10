@@ -466,16 +466,25 @@ async fn get_users(State(state): State<UsersState>) -> Json<Vec<User>> {
     Json(state.get_users().await)
 }
 async fn get_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<Json<User>, Json<MissingUser>> {
-    todo!("TODO")
+    match state.get_user(id).await {
+        Some(user) => Ok(Json(user)),
+        None => Err(Json(MissingUser { id })),    
+    }
 }
 async fn create_user(State(state): State<UsersState>, Json(create_request): Json<UserWithoutId>) -> Json<CreateUserResponse> {
-    todo!("TODO")
+    let id = state.create_user(create_request).await;
+
+    Json(CreateUserResponse { id })
 }
 async fn update_user(State(state): State<UsersState>, Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), Json<MissingUser>> {
-    todo!("TODO")
+    let result = state.update_user(id, update_request).await;
+    
+    result.map_err(|missing_user| Json(missing_user))
 }
 async fn delete_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<(), Json<MissingUser>> {
-    todo!("TODO")
+    let result = state.delete_user(id).await;
+
+    result.map_err(|missing_user| Json(missing_user))
 }
 
 #[derive(Clone)]
