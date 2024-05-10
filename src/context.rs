@@ -30,6 +30,7 @@ use hyper::Request;
 use tokio::sync::Mutex;
 use axum::Json;
 use axum::extract::Path;
+use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct ConversionRate(f64);
@@ -450,7 +451,7 @@ async fn run_users_server() {
             .route("/users",        post(create_user))
             .route("/users/:id",    put(update_user))
             .route("/users/:id",    delete(delete_user))
-            .with_state(());
+            .with_state(UsersState::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
@@ -461,24 +462,99 @@ async fn run_users_server() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn get_users() -> Json<Vec<User>> {
+async fn get_users(State(state): State<UsersState>) -> Json<Vec<User>> {
+    Json(state.get_users().await)
+}
+async fn get_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<Json<User>, Json<MissingUser>> {
     todo!("TODO")
 }
-async fn get_user(Path(id): Path<u64>) -> Result<Json<User>, Json<MissingUser>> {
+async fn create_user(State(state): State<UsersState>, Json(create_request): Json<UserWithoutId>) -> Json<CreateUserResponse> {
     todo!("TODO")
 }
-async fn create_user(Json(create_request): Json<CreateUserRequest>) -> Json<CreateUserResponse> {
+async fn update_user(State(state): State<UsersState>, Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), Json<MissingUser>> {
     todo!("TODO")
 }
-async fn update_user(Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), Json<MissingUser>> {
-    todo!("TODO")
-}
-async fn delete_user(Path(id): Path<u64>) -> Result<(), Json<MissingUser>> {
+async fn delete_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<(), Json<MissingUser>> {
     todo!("TODO")
 }
 
+#[derive(Clone)]
 struct UsersState {
-    users: Arc<Mutex<()>>,
+    users: Arc<Mutex<HashMap<u64, UserWithoutId>>>,
+    counter: Arc<Mutex<u64>>,
+}
+
+impl UsersState {
+    fn new() -> Self {
+        Self {
+            users: Arc::new(Mutex::new(HashMap::new())),
+            counter: Arc::new(Mutex::new(0)),
+        }
+    }
+
+    async fn get_users(&self) -> Vec<User> {
+        let guard = self.users.lock().await;
+
+        (*guard).iter().map(|(id, user)| User {
+            id: *id,
+            name: user.name.clone(),
+            email: user.email.clone(),
+        }).collect()
+    }
+
+    async fn get_user(&self, id: u64) -> Option<User> {
+        let guard = self.users.lock().await;
+
+        guard.get(&id).map(|user| User {
+            id,
+            name: user.name.clone(),
+            email: user.email.clone(),
+        })
+    }
+
+    async fn create_user(&self, user: UserWithoutId) -> u64 {
+        let mut guard = self.users.lock().await;
+
+        let id = {
+            let mut counter_guard = self.counter.lock().await;
+
+            *counter_guard += 1;
+
+            *counter_guard
+        };
+
+        guard.insert(id, user);
+
+        id
+    }
+
+    async fn update_user(&self, id: u64, update: UpdateUserRequest) -> Result<(), MissingUser> {
+        let mut guard = self.users.lock().await;
+
+        if let Some(user) = guard.get_mut(&id) {
+            if let Some(name) = update.name {
+                user.name = name;
+            }
+
+            if let Some(email) = update.email {
+                user.email = email;
+            }
+
+            Ok(())
+        } else {
+            Err(MissingUser { id })
+        }
+    }
+
+    async fn delete_user(&self, id: u64) -> Result<(), MissingUser> {
+        let mut guard = self.users.lock().await;
+
+        if guard.remove(&id).is_some() {
+            Ok(())
+        } else {
+            Err(MissingUser { id })
+        }
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
@@ -495,7 +571,7 @@ struct UpdateUserRequest {
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
-struct CreateUserRequest {
+struct UserWithoutId {
     name: String,
     email: String,
 }
