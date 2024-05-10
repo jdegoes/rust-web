@@ -276,7 +276,7 @@ struct TodosState {
 impl TodosState {
     async fn new() -> Self {
         let pool = PgPoolOptions::new()
-            .max_connections(1)
+            .max_connections(16)
             .connect(&std::env::var("DATABASE_URL").unwrap())
             .await
             .unwrap();
@@ -286,23 +286,69 @@ impl TodosState {
 }
 
 async fn get_all_todos(State(state): State<TodosState>) -> Json<Vec<Todo>> {
-    todo!("Implement get_all_todos");
+    let pool = &state.pool;
+
+    let todos = sqlx::query!("SELECT * FROM todos").fetch_all(pool).await.unwrap();
+
+    Json(todos.into_iter().map(|todo| {
+        Todo {
+            id: todo.id,
+            title: todo.title,
+            description: todo.description,
+            done: todo.done,
+            created_at: todo.created_at.to_string(),
+        }
+    }).collect())
 }
 
 async fn create_todo(State(state): State<TodosState>, Json(create): Json<CreateTodo>) -> Json<CreatedTodo> {
-    todo!("Implement create_todo");
+    let pool = &state.pool;
+
+    let id = sqlx::query!(
+        "INSERT INTO todos (title, description, done) VALUES ($1, $2, false) RETURNING id",
+        create.title,
+        create.description
+    ).fetch_one(pool).await.unwrap().id;    
+
+    Json(CreatedTodo { id })
 }
 
 async fn get_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> Json<Option<Todo>> {
-    todo!("Implement get_todo");
+    let pool = &state.pool;
+
+    let todo = sqlx::query!("SELECT * FROM todos WHERE id = $1", id).fetch_optional(pool).await.unwrap();
+
+    Json(todo.map(|todo| {
+        Todo {
+            id: todo.id,
+            title: todo.title,
+            description: todo.description,
+            done: todo.done,
+            created_at: todo.created_at.to_string(),
+        }
+    }))
 }
 
 async fn update_todo(State(state): State<TodosState>, Path(id): Path<i64>, Json(update): Json<UpdateTodo>) -> () {
-    todo!("Implement update_todo");
+    let pool = &state.pool;
+
+    sqlx::query!(
+        "UPDATE todos SET title = COALESCE($1, title), description = COALESCE($2, description), done = COALESCE($3, done) where id = $4",
+        update.title,
+        update.description,
+        update.done,
+        id,
+    ).execute(pool).await.unwrap();
+
+    ()
 }
 
 async fn delete_todo(State(state): State<TodosState>, Path(id): Path<i64>) -> () {
-    todo!("Implement delete_todo");
+    let pool = &state.pool;
+
+    sqlx::query!("DELETE FROM todos WHERE id = $1", id).execute(pool).await.unwrap();
+
+    ()
 }
 
 #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
