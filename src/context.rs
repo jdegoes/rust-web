@@ -28,6 +28,8 @@ use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
 use tokio::sync::Mutex;
+use axum::Json;
+use axum::extract::Path;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 struct ConversionRate(f64);
@@ -441,5 +443,69 @@ async fn extension_gbp_to_usd_handler() -> String {
 /// Place it into a web server and test to ensure it meets your requirements.
 ///
 async fn run_users_server() {
-    todo!("Implement the users API")
+    let app = 
+        Router::new()
+            .route("/users",        get(get_users))
+            .route("/users/:id",    get(get_user))
+            .route("/users",        post(create_user))
+            .route("/users/:id",    put(update_user))
+            .route("/users/:id",    delete(delete_user))
+            .with_state(());
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
+
+    println!("Listening on {}", listener.local_addr().unwrap());
+
+    axum::serve(listener, app).await.unwrap();
+}
+
+async fn get_users() -> Json<Vec<User>> {
+    todo!("TODO")
+}
+async fn get_user(Path(id): Path<u64>) -> Result<Json<User>, Json<MissingUser>> {
+    todo!("TODO")
+}
+async fn create_user(Json(create_request): Json<CreateUserRequest>) -> Json<CreateUserResponse> {
+    todo!("TODO")
+}
+async fn update_user(Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), Json<MissingUser>> {
+    todo!("TODO")
+}
+async fn delete_user(Path(id): Path<u64>) -> Result<(), Json<MissingUser>> {
+    todo!("TODO")
+}
+
+struct UsersState {
+    users: Arc<Mutex<()>>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct User {
+    id: u64,
+    name: String,
+    email: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct UpdateUserRequest {
+    name: Option<String>,
+    email: Option<String>,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct CreateUserRequest {
+    name: String,
+    email: String,
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct CreateUserResponse {
+    id: u64,
+}
+
+#[derive(serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct MissingUser {
+    id: u64,
 }
