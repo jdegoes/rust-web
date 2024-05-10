@@ -23,10 +23,12 @@ use std::sync::Arc;
 
 #[allow(unused_imports)]
 use axum::extract::State;
+use axum::response::IntoResponse;
 #[allow(unused_imports)]
 use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
+use hyper::{Response, StatusCode};
 use tokio::sync::Mutex;
 use axum::Json;
 use axum::extract::Path;
@@ -465,26 +467,19 @@ async fn run_users_server() {
 async fn get_users(State(state): State<UsersState>) -> Json<Vec<User>> {
     Json(state.get_users().await)
 }
-async fn get_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<Json<User>, Json<MissingUser>> {
-    match state.get_user(id).await {
-        Some(user) => Ok(Json(user)),
-        None => Err(Json(MissingUser { id })),    
-    }
+async fn get_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<Json<User>, MissingUser> {
+    state.get_user(id).await.map(|user| Json(user)).ok_or(MissingUser { id })
 }
 async fn create_user(State(state): State<UsersState>, Json(create_request): Json<UserWithoutId>) -> Json<CreateUserResponse> {
     let id = state.create_user(create_request).await;
 
     Json(CreateUserResponse { id })
 }
-async fn update_user(State(state): State<UsersState>, Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), Json<MissingUser>> {
-    let result = state.update_user(id, update_request).await;
-    
-    result.map_err(|missing_user| Json(missing_user))
+async fn update_user(State(state): State<UsersState>, Path(id): Path<u64>, Json(update_request): Json<UpdateUserRequest>) -> Result<(), MissingUser> {
+    state.update_user(id, update_request).await
 }
-async fn delete_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<(), Json<MissingUser>> {
-    let result = state.delete_user(id).await;
-
-    result.map_err(|missing_user| Json(missing_user))
+async fn delete_user(State(state): State<UsersState>, Path(id): Path<u64>) -> Result<(), MissingUser> {
+    state.delete_user(id).await
 }
 
 #[derive(Clone)]
@@ -564,6 +559,28 @@ impl UsersState {
             Err(MissingUser { id })
         }
     }
+}
+
+impl IntoResponse for MissingUser {
+    fn into_response(self) -> axum::http::Response<Body> {
+        let details = 
+            MissingUserErrorDetails {
+                id: self.id,
+                message: format!("User with id {} not found", self.id),
+            };
+
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("Content-Type", "application/json")
+            .body(Body::from(serde_json::to_string(&details).unwrap()))
+            .unwrap()
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]
+struct MissingUserErrorDetails {
+    id: u64,
+    message: String,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq)]

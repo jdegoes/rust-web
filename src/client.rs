@@ -50,7 +50,15 @@ pub async fn cat_fact_server() {
     axum::serve(listener, app).await.unwrap();
 }
 async fn cat_fact_handler() -> Html<String> {
-    todo!("Using reqwest::get and .json, get a random cat fact from https://catfact.ninja/fact and return it as an HTML response.")
+    let response = 
+        reqwest::get("https://catfact.ninja/fact")
+            .await
+            .unwrap()
+            .json::<CatFact>()
+            .await
+            .unwrap();
+
+    Html(format!("<html><body><h1>{}</h1></body></html>", response.fact))
 }
 #[derive(serde::Deserialize)]
 struct CatFact {
