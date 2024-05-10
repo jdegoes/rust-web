@@ -320,15 +320,13 @@ impl TodoRepo for TodoRepoPostgres {
 }
 
 fn create_todo_app<R: TodoRepo>(todo_repo: R) -> Router<()> {
-    let state = TodosState { todo_repo };
-
-    let app = Router::new()
-        .route("/todos", get(get_all_todos))
-        .route("/todos", post(create_todo))
-        .route("/todos/:id", get(get_todo))
-        .route("/todos/:id", put(update_todo))
-        .route("/todos/:id", delete(delete_todo))
-        .with_state(state);
+    let app = Router::<R>::new()
+        .route("/todos", get(get_all_todos::<R>))
+        .route("/todos", post(create_todo::<R>))
+        .route("/todos/:id", get(get_todo::<R>))
+        .route("/todos/:id", put(update_todo::<R>))
+        .route("/todos/:id", delete(delete_todo::<R>))
+        .with_state(todo_repo);
 
     app
 }
@@ -351,35 +349,30 @@ pub async fn run_todo_app() {
     axum::serve(listener, app).await.unwrap();
 }
 
-#[derive(Clone)]
-struct TodosState<R: TodoRepo> {
-    todo_repo: R
-}
-
-async fn get_all_todos<R: TodoRepo>(State(state): State<TodosState<R>>) -> Json<Vec<Todo>> {
-    let todos = state.todo_repo.get_all().await;
+async fn get_all_todos<R: TodoRepo>(State(state): State<R>) -> Json<Vec<Todo>> {
+    let todos = state.get_all().await;
 
     Json(todos)
 }
 
-async fn create_todo<R: TodoRepo>(State(state): State<TodosState<R>>, Json(create): Json<CreateTodo>) -> Json<CreatedTodo> {
-    let id = state.todo_repo.create(create.title.clone(), create.description.clone()).await;
+async fn create_todo<R: TodoRepo>(State(state): State<R>, Json(create): Json<CreateTodo>) -> Json<CreatedTodo> {
+    let id = state.create(create.title.clone(), create.description.clone()).await;
 
     Json(CreatedTodo { id })
 }
 
-async fn get_todo<R: TodoRepo>(State(state): State<TodosState<R>>, Path(id): Path<i64>) -> Json<Option<Todo>> {
-    let todo = state.todo_repo.get(id).await;
+async fn get_todo<R: TodoRepo>(State(state): State<R>, Path(id): Path<i64>) -> Json<Option<Todo>> {
+    let todo = state.get(id).await;
 
     Json(todo)
 }
 
-async fn update_todo<R: TodoRepo>(State(state): State<TodosState<R>>, Path(id): Path<i64>, Json(update): Json<UpdateTodo>) -> () {
-    state.todo_repo.update(id, update.title.clone(), update.description.clone(), update.done).await;
+async fn update_todo<R: TodoRepo>(State(state): State<R>, Path(id): Path<i64>, Json(update): Json<UpdateTodo>) -> () {
+    state.update(id, update.title.clone(), update.description.clone(), update.done).await;
 }
 
-async fn delete_todo<R: TodoRepo>(State(state): State<TodosState<R>>, Path(id): Path<i64>) -> () {
-    state.todo_repo.delete(id).await;
+async fn delete_todo<R: TodoRepo>(State(state): State<R>, Path(id): Path<i64>) -> () {
+    state.delete(id).await;
 }
 
 #[derive(serde::Deserialize, Debug, PartialEq, Clone)]
