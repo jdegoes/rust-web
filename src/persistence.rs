@@ -235,7 +235,7 @@ struct TodoPersistence {
 }
 
 #[async_trait]
-trait TodoRepo: Send + Sync {
+trait TodoRepo: Send + Sync + Clone + 'static {
     async fn get_all(&self) -> Vec<Todo>;
 
     async fn create(&self, title: String, description: String) -> i64;
@@ -319,20 +319,9 @@ impl TodoRepo for TodoRepoPostgres {
     }
 }
 
-///
-/// GRADUATION PROJECT
-///
-/// In this project, you will build a simple CRUD API for a todo list,
-/// which uses sqlx for persistence.
-///
-pub async fn run_todo_app() {
-    let state = TodosState { todo_repo: TodoRepoPostgres::new().await };
+fn create_todo_app<R: TodoRepo>(todo_repo: R) -> Router<()> {
+    let state = TodosState { todo_repo };
 
-    // GET      /todos/     <- get everything
-    // POST     /todos/     <- create a new todo
-    // GET      /todos/:id  <- get a todo
-    // PUT      /todos/:id  <- update a todo
-    // DELETE   /todos/:id  <- delete a todo
     let app = Router::new()
         .route("/todos", get(get_all_todos))
         .route("/todos", post(create_todo))
@@ -340,6 +329,18 @@ pub async fn run_todo_app() {
         .route("/todos/:id", put(update_todo))
         .route("/todos/:id", delete(delete_todo))
         .with_state(state);
+
+    app
+}
+
+///
+/// GRADUATION PROJECT
+///
+/// In this project, you will build a simple CRUD API for a todo list,
+/// which uses sqlx for persistence.
+///
+pub async fn run_todo_app() {
+    let app = create_todo_app(TodoRepoPostgres::new().await);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
