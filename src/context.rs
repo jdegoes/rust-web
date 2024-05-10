@@ -26,6 +26,9 @@ use axum::{body::Body, http::Method, routing::*};
 #[allow(unused_imports)]
 use hyper::Request;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+struct ConversionRate(f64);
+
 ///
 /// EXERCISE 1
 ///
@@ -42,11 +45,11 @@ async fn closure_shared_context() {
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
 
-    let _gbp_to_usd_rate = 1.3;
+    let _gbp_to_usd_rate = ConversionRate(1.3);
 
     let _app = Router::<()>::new()
-        .route("/usd_to_gbp", get(move |usd: String| {
-            async move { convert_usd_to_gbp(usd, _gbp_to_usd_rate) }
+        .route("/usd_to_gbp", get(move |usd: String| async move { 
+            convert_usd_to_gbp(usd, _gbp_to_usd_rate)
         }))
         .route("/gbp_to_usd", get(move |usd: String| async move { 
             convert_usd_to_gbp(usd, _gbp_to_usd_rate) 
@@ -69,15 +72,12 @@ async fn closure_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-fn convert_usd_to_gbp(usd: String, gbp_to_usd_rate: f64) -> String {
+fn convert_usd_to_gbp(usd: String, ConversionRate(gbp_to_usd_rate): ConversionRate) -> String {
     format!("{}", usd.parse::<f64>().unwrap() * gbp_to_usd_rate)
 }
-fn convert_gbp_to_usd(gbp: String, gbp_to_usd_rate: f64) -> String {
+fn convert_gbp_to_usd(gbp: String, ConversionRate(gbp_to_usd_rate): ConversionRate) -> String {
     format!("{}", gbp.parse::<f64>().unwrap() / gbp_to_usd_rate)
 }
-
-#[derive(Clone, Debug, PartialEq)]
-struct Foo{}
 
 ///
 /// EXERCISE 2
@@ -106,17 +106,29 @@ async fn shared_mutable_context() {
     use http_body_util::BodyExt;
     /// for ServiceExt::oneshot
     use tower::util::ServiceExt;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
-    let _gbp_to_usd_rate = 1.3;
+    let arc = Arc::new(Mutex::new(ConversionRate(1.3)));
+
+    let copy2 = arc.clone();
 
     let _app = Router::<()>::new()
         .route(
             "/usd_to_gbp",
-            get(move |usd: String| async move { convert_usd_to_gbp(usd, _gbp_to_usd_rate) }),
+            get(move |usd: String| async move { 
+                let guard = arc.lock().await;
+
+                convert_usd_to_gbp(usd, *guard)
+            }),
         )
         .route(
             "/gbp_to_usd",
-            get(move |gbp: String| async move { convert_gbp_to_usd(gbp, _gbp_to_usd_rate) }),
+            get(move |gbp: String| async move { 
+                let guard = copy2.lock().await;
+
+                convert_gbp_to_usd(gbp, *guard) 
+            }),
         );
 
     let response = _app
@@ -164,7 +176,7 @@ async fn state_shared_context() {
     let _app = Router::new()
         .route("/usd_to_gbp", get(usd_to_gbp_handler))
         .route("/gbp_to_usd", get(gbp_to_usd_handler))
-        .with_state(());
+        .with_state(_gbp_to_usd_rate);
 
     let response = _app
         .oneshot(
@@ -183,11 +195,15 @@ async fn state_shared_context() {
 
     assert_eq!(_body_as_string, "130");
 }
-async fn usd_to_gbp_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn usd_to_gbp_handler(State(rate): State<f64>, body: String) -> String {
+    let body_as_f64 = body.parse::<f64>().unwrap();
+
+    format!("{}", body_as_f64 * rate)
 }
-async fn gbp_to_usd_handler() -> String {
-    todo!("Use State to access the exchange rate")
+async fn gbp_to_usd_handler(State(rate): State<f64>, body: String) -> String {
+    let body_as_f64 = body.parse::<f64>().unwrap();
+
+    format!("{}", body_as_f64 / rate)
 }
 
 ///
